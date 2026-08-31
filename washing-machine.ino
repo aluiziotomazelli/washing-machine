@@ -1,847 +1,764 @@
 #include <Arduino.h>
-#include <Bounce2.h>		//biblioteca debouncer
-#include <TimeLib.h>		//biblioteca do tempo
+#include <Bounce2.h> // Debouncer library
+#include <TimeLib.h> // Time library
 
-
-/* A numeração das portas foi usada de forma a facilitar a ligação
- * do Arduino Pro Mini aos outros componentes da placa de circuito impresso.
+/* Pin numbering was chosen to facilitate routing and wiring
+ * from the Arduino Pro Mini to the other PCB components.
  */
 
+const byte chaveAmaciante = 1; // Switch pin for softener function
+const byte ledAmaciante = 6;   // Softener LED indicator pin
 
-const byte chaveAmaciante = 1;		//chave para funcao amaciante
-const byte ledAmaciante = 6;		//pino do led do amaciante
+const byte ledOn = 7;       // LED indicating the machine is running
+const byte chaveStart = A3; // Start/Stop sequence button
 
-const byte ledOn = 7;			//led que indica a máquina funcionando
-const byte chaveStart = A3;		//inicia ou para a sequencia
+const byte motorDir = 8;     // Turn motor clockwise (right)
+const byte motorEsq = 9;     // Turn motor counter-clockwise (left)
+const byte atuadorBomba = 4; // Turn on brake actuator and drain pump
+const byte solenoide1_2 = 3; // Turn on solenoids 1 and 2 (main water valves)
+const byte solenoide3 = 2;   // Turn on solenoid 3 (softener valve)
 
-const byte motorDir = 8; 		//liga o motor para direita
-const byte motorEsq = 9;		//liga o motor para esquerda
-const byte atuadorBomba = 4;		//liga o atuador e a bomba
-const byte solenoide1_2 = 3;		//liga solenoide 1 e 2
-const byte solenoide3 = 2;		//liga solenoide 3
+const byte chavePrograma = A5; // Program selector switch input
+const byte chaveNivel = A4;    // Water level selector switch input
 
-const byte chavePrograma = A5;		//recebe sinal da chave de programas
-const byte chaveNivel = A4;		//recebe sinal da chave de niveis
+const byte ledLavar = A2;       // Wash LED
+const byte ledEnxaguar = A1;    // Rinse LED
+const byte ledCentrifugar = A0; // Spin LED
 
-const byte ledLavar = A2;		//led lavar
-const byte ledEnxaguar = A1;		//led enxaguar
-const byte ledCentrifugar = A0;		//led centrifugar
+const byte ledNivelM = 12; // Medium water level LED
+const byte ledNivelB = 13; // Low water level LED
 
-const byte ledNivelM = 12;		//led nivel medio
-const byte ledNivelB = 13;		//led nivel baixo
+const byte chaveNivelB = 10; // Low level pressure switch input
+const byte chaveNivelM = 11; // Medium level pressure switch input
 
-const byte chaveNivelB = 10;		//recebe sinal do pressostato nivel alto
-const byte chaveNivelM = 11;		//recebe sinal do pressostato nivel alto
+const byte buzzer = 5; // Buzzer pin
 
-const byte buzzer = 5;			//buzzer
+byte seletorPrograma; // Program selection counter
+byte seletorNivel;    // Water level selection counter
 
-byte seletorPrograma;			//contador do Programa
-byte seletorNivel;			//contador do Nivel
+int tempoDelayEntreEtapas = 4000; // Delay between stages (ms)
 
-int tempoDelayEntreEtapas = 4000; 	//delay entre as etapas
+bool usaAmaciante; // Softener mode status
+bool duploEnxague; // Double rinse counter/flag
+bool botaoStart;   // Start button status
 
-bool usaAmaciante;			//status do botao amaciante
-bool duploEnxague;			//conta o numero de enxagues
-bool botaoStart;			//status do botao
+bool estadoChaveNivelB; // Low water level switch state
+bool estadoChaveNivelM; // Medium water level switch state
 
-bool estadoChaveNivelB;			//indica estado da chave de nivel baixo
-bool estadoChaveNivelM;			//indica estado da chave de nivel medio
+bool erro;     // Error flag
+byte tipoErro; // Error code/type
 
-bool erro;				//indica algum erro
-byte tipoErro;				//indica o tipo de erro
+unsigned long tempoAvanco; // Global time variable used for timing cycles
 
-unsigned long tempoAvanco; 		//variavel global de tempo usada para temporizar os ciclos
-
-
-// Inicializa o Bouncer para os objetos:
-Bounce programa = Bounce(); 		//Chave de seleção de Programa
-Bounce nivel = Bounce();		//Chave de seleção de Nivel
-Bounce start = Bounce();	 	//chave Start
-Bounce amaciante = Bounce();		//chave amaciante
-/* A biblioteca debouncer fornece uma maneira de evitar que ruídos
- * elétricos que possam surgir nos botões atrapalhem a seleção
- * das funções. Maior informação pode ser conseguida na documentção da biblioteca.
+// Initialize Bounce2 debouncer objects:
+Bounce programa = Bounce();  // Program selector switch
+Bounce nivel = Bounce();     // Water level selector switch
+Bounce start = Bounce();     // Start switch
+Bounce amaciante = Bounce(); // Softener switch
+/* The debouncer library prevents electrical contact noise
+ * from disrupting button presses and function selection.
  */
-
 
 void bip(int vezes = 1, int tempo = 150)
-/* Faz o bipe do buzzer sem oscilador interno,
- * armazena a quantidade de vezes (padrão 1)
- * e de tempo (padrão 150 ms)
- *
- * Seria mais fácil usar um buzzer com oscilador
- *  interno, mas eu só tinha um sem oscilador.
+/* Emits beeps using a passive buzzer (without internal oscillator),
+ * takes repetition count (default 1) and duration (default 150 ms).
  */
 {
-	for (int x = 0; x < vezes; x++)
-	{
-		tone(buzzer, 3000); 	//seta o pino do buzzer e a frequencia em 3000, frequencia bem audível
-		delay(tempo);   	//espera o tempo
-		noTone(buzzer);  	//desliga o buzzer
-		delay(tempo);		//espera o tempo caso o buzzer toque mais de uma vez.
-	}
+    for (int x = 0; x < vezes; x++) {
+        tone(buzzer, 3000); // Set buzzer pin and frequency to 3000 Hz
+        delay(tempo);       // Wait tone duration
+        noTone(buzzer);     // Turn off buzzer
+        delay(tempo);       // Wait interval between consecutive beeps
+    }
 }
 
 void setup()
 {
-	pinMode(chaveAmaciante, INPUT_PULLUP);	//seta o pino como entrada e em HIGH devido ao resistor pull-up interno
+    pinMode(chaveAmaciante, INPUT_PULLUP); // Set pin as input with internal pull-up resistor
 
-	pinMode(ledAmaciante, OUTPUT);		//pino do ledAmaciante
-	digitalWrite(ledAmaciante, LOW);	//seta em LOW
+    pinMode(ledAmaciante, OUTPUT);   // Softener LED output
+    digitalWrite(ledAmaciante, LOW); // Start turned off
 
-	pinMode(ledOn, OUTPUT);			//seta pino como saida
+    pinMode(ledOn, OUTPUT); // Machine running LED output
 
-	pinMode(chaveStart, INPUT_PULLUP);	//pino do botao de start
+    pinMode(chaveStart, INPUT_PULLUP); // Start button input
 
-	pinMode(motorDir, OUTPUT);		//seta pino como saida
-	digitalWrite(motorDir, LOW); 		//seta o pino em LOW
+    pinMode(motorDir, OUTPUT);   // Motor clockwise output
+    digitalWrite(motorDir, LOW); // Start turned off
 
-	pinMode(motorEsq, OUTPUT);		//seta pino como saida
-	digitalWrite(motorEsq, LOW); 		//seta o pino em LOW
+    pinMode(motorEsq, OUTPUT);   // Motor counter-clockwise output
+    digitalWrite(motorEsq, LOW); // Start turned off
 
-	pinMode(atuadorBomba, OUTPUT);  	//seta pino como saida
-	digitalWrite(atuadorBomba, LOW); 	//seta o pino em LOW
+    pinMode(atuadorBomba, OUTPUT);   // Brake actuator & drain pump output
+    digitalWrite(atuadorBomba, LOW); // Start turned off
 
-	pinMode(solenoide1_2, OUTPUT);		//seta pino como saida
-	digitalWrite(solenoide1_2, LOW); 	//seta o pino em LOW
+    pinMode(solenoide1_2, OUTPUT);   // Solenoids 1 & 2 output
+    digitalWrite(solenoide1_2, LOW); // Start turned off
 
-	pinMode(solenoide3, OUTPUT);		//seta pino como saida
-	digitalWrite(solenoide3, LOW); 		//seta o pino em LOW
+    pinMode(solenoide3, OUTPUT);   // Solenoid 3 output
+    digitalWrite(solenoide3, LOW); // Start turned off
 
-	pinMode(chavePrograma, INPUT_PULLUP); 	//seta o pino como entrada em nivel alto
+    pinMode(chavePrograma, INPUT_PULLUP); // Program selector input
 
+    pinMode(chaveNivel, INPUT_PULLUP); // Water level selector input
 
-	pinMode(chaveNivel, INPUT_PULLUP);	//seta o pino como entrada em nivel alto
+    pinMode(ledLavar, OUTPUT);   // Wash LED output
+    digitalWrite(ledLavar, LOW); // Start turned off
 
+    pinMode(ledEnxaguar, OUTPUT);   // Rinse LED output
+    digitalWrite(ledEnxaguar, LOW); // Start turned off
 
-	pinMode(ledLavar, OUTPUT);		//seta pino como saida
-	digitalWrite(ledLavar, LOW); 		//seta o pino em LOW
+    pinMode(ledCentrifugar, OUTPUT);   // Spin LED output
+    digitalWrite(ledCentrifugar, LOW); // Start turned off
 
-	pinMode(ledEnxaguar, OUTPUT);		//seta pino como saida
-	digitalWrite(ledEnxaguar, LOW); 	//seta o pino em LOW
+    pinMode(ledNivelM, OUTPUT);   // Medium level LED output
+    digitalWrite(ledNivelM, LOW); // Start turned off
 
-	pinMode(ledCentrifugar, OUTPUT);	//seta pino como saida
-	digitalWrite(ledCentrifugar, LOW); 	//seta o pino em LOW
+    pinMode(ledNivelB, OUTPUT);   // Low level LED output
+    digitalWrite(ledNivelB, LOW); // Start turned off
 
-	pinMode(ledNivelM, OUTPUT);		//seta pino como saida
-	digitalWrite(ledNivelM, LOW); 		//seta o pino em LOW
+    pinMode(chaveNivelM, INPUT_PULLUP); // Medium level pressure switch input
 
-	pinMode(ledNivelB, OUTPUT);		//seta pino como saida
-	digitalWrite(ledNivelB, LOW); 		//seta o pino em LOW
+    pinMode(chaveNivelB, INPUT_PULLUP); // Low level pressure switch input
 
-	pinMode(chaveNivelM, INPUT_PULLUP);	//seta o pino como entrada em nivel baixo
+    pinMode(buzzer, OUTPUT);   // Buzzer output
+    digitalWrite(buzzer, LOW); // Start turned off
 
-	pinMode(chaveNivelB, INPUT_PULLUP);	//seta o pino como entrada em nivel baixo
+    // Configure Bounce2 for Program selector
+    programa.attach(chavePrograma); // Attach debouncer to pin
+    programa.interval(100);         // Set debounce interval to 100 ms
+    seletorPrograma = 2;            // Default program = 2 (Rinse)
 
-	pinMode(buzzer, OUTPUT);		//seta pino como saida
-	digitalWrite(buzzer, LOW);		//seta o pino em LOW
+    // Configure Bounce2 for Water Level selector
+    nivel.attach(chaveNivel); // Attach debouncer to pin
+    nivel.interval(100);      // Set debounce interval to 100 ms
+    seletorNivel = 2;         // Default water level = 2 (Medium)
 
-	// Seta o Bounce2 para o Programa
-	programa.attach(chavePrograma);	 	//atraca o debouncer ao pino
-	programa.interval(100);       		//seta o intervalo do debouncer
-	seletorPrograma = 2; 			//coloca o controle de programa no 2 (Enxague)
+    // Configure Bounce2 for Start button
+    start.attach(chaveStart); // Attach debouncer to pin
+    start.interval(100);      // Set debounce interval to 100 ms
+    botaoStart = false;       // Initial status is false (stopped)
 
-	// Seta o Bounce2 para o Nivel
-	nivel.attach(chaveNivel); 		//atraca o debouncer ao pino
-	nivel.interval(100);       		//seta o intervalo do debouncer
-	seletorNivel = 2; 			//coloca o controle de nivel no 2 (medio)
+    // Configure Bounce2 for Softener button
+    amaciante.attach(chaveAmaciante); // Attach debouncer to pin
+    amaciante.interval(100);          // Set debounce interval to 100 ms
+    usaAmaciante = false;             // Softener status starts false
+    duploEnxague = false;             // Double rinse starts false
 
-	// Seta o Bounce2 para o Start
-	start.attach(chaveStart); 	//atraca o debouncer ao pino
-	start.interval(100);       	//seta o intervalo do debouncer
-	botaoStart = false;		//inicia em falso
+    bip(3, 100); // 3 quick beeps indicating power-on initialization
 
-	// Seta o Bounce2 para o Amaciante
-	amaciante.attach(chaveAmaciante);	//atraca ao pino da chave do amaciante
-	amaciante.interval(100);       		//seta o intervalo do debouncer
-	usaAmaciante = false; 			//inicia a varivel que armazena o status do amaciante em false
-	duploEnxague = false; 			//inicia em apenas um enxague
-
-	bip(3, 100); 			//dá 3 bipe rápidos indicando que a máquina foi ligada
-
-} //edn void setup
+} // end setup
 
 void chaves_niveis()
 {
+    /* The pressure switch has 3 contacts:
+     * LOW Level:    31-32 = NC (HIGH when active, with external resistor)
+     * MEDIUM Level: 11-13 = NO (LOW when active, with external resistor)
+     * HIGH Level:   21-23 = NO (LOW when active, with external resistor)
+     *
+     * HIGH LEVEL IS NOT CURRENTLY USED IN THIS PROGRAM
+     *
+     * Because the pressure switch mixes NC and NO contacts, this helper
+     * maps raw levels to normalized boolean states (true = level reached).
+     */
 
-	/* O pressostato possui 3 chaves:
-	 * Nivel BAIXO: 31-32 = NF (HIGH se ativado, com resistor externo)
-	 * Nivel MEDIO:	11-13 = NA (LOW se ativado, com resistor externo)
-	 * Nivel ALTO: 	21-23 = NA (LOW se ativado, com resistor externo)
-	 *
-	 * NIVEL ALTO NAO ESTA SENDO USADO NO PROGRAMA
-	 *
-	 * Como o pressostato tem chaves NF e NA, fica fácil se confundir
-	 * com o seu estado HIGH ou LOW. Assim criei a essa funcao  para
-	 * facilitar o uso. Se a chave foi acionada a variavel estaodoChaveX
-	 * torna-se true, se foi desacionada, torna-se false.
-	*/
+    if (digitalRead(chaveNivelB) == LOW) // Water level has not reached minimum
+        estadoChaveNivelB = false;
+    else if (digitalRead(chaveNivelB) == HIGH) // Minimum level reached
+        estadoChaveNivelB = true;
 
-	if (digitalRead(chaveNivelB) == LOW)	//true quando o nivel da agua está no mínimo
-		estadoChaveNivelB = false;
-	else if(digitalRead(chaveNivelB) == HIGH)
-		estadoChaveNivelB = true;
+    if (digitalRead(chaveNivelM) == HIGH) // Medium level not reached
+        estadoChaveNivelM = false;
+    else if (digitalRead(chaveNivelM) == LOW) // Medium level reached
+        estadoChaveNivelM = true;
 
-	if (digitalRead(chaveNivelM) == HIGH)	//true quando o nivel da agua está no medio
-		estadoChaveNivelM = false;
-	else if (digitalRead(chaveNivelM) == LOW)
-		estadoChaveNivelM = true;
-
-} //end void ChavesNiveis()
+} // end chaves_niveis()
 
 void led_lavar()
 {
-	//aciona o led do programa em Lavar
-	digitalWrite(ledLavar, HIGH);
-	digitalWrite(ledEnxaguar, LOW);
-	digitalWrite(ledCentrifugar, LOW);
+    // Activate Wash program LED
+    digitalWrite(ledLavar, HIGH);
+    digitalWrite(ledEnxaguar, LOW);
+    digitalWrite(ledCentrifugar, LOW);
 }
 
 void led_exaguar()
 {
-	// aciona o led do programa em Enxaguar
-	digitalWrite(ledLavar, LOW);
-	digitalWrite(ledEnxaguar, HIGH);
-	digitalWrite(ledCentrifugar, LOW);
+    // Activate Rinse program LED
+    digitalWrite(ledLavar, LOW);
+    digitalWrite(ledEnxaguar, HIGH);
+    digitalWrite(ledCentrifugar, LOW);
 }
 
 void led_centrifugar()
 {
-	// aciona o led do programa em centrifugar
-	digitalWrite(ledLavar, LOW);
-	digitalWrite(ledEnxaguar, LOW);
-	digitalWrite(ledCentrifugar, HIGH);
+    // Activate Spin program LED
+    digitalWrite(ledLavar, LOW);
+    digitalWrite(ledEnxaguar, LOW);
+    digitalWrite(ledCentrifugar, HIGH);
 }
 
 void selecao_programa()
 {
-	programa.update(); 			//dá update no botao seletor de programa usado a biblioteca Bounce2
-	if (programa.fell()) 			//se o botao vai de HIGH (normal) para LOW (pressionado)
-	{
-		seletorPrograma++;   		//o contador do programa aumenta 1
-		bip();
-		if (seletorPrograma > 3)	//se o contador passar de 3
-		{
-			seletorPrograma = 1;  	//ele volta para 1
-		}
-	}
+    programa.update();   // Update debouncer state
+    if (programa.fell()) // If button transitions from HIGH to LOW (pressed)
+    {
+        seletorPrograma++; // Increment program counter
+        bip();
+        if (seletorPrograma > 3) // Wrap around if exceeding 3
+        {
+            seletorPrograma = 1;
+        }
+    }
 
-	switch (seletorPrograma)  		//verifica o status da variavel e aciona o LED correspondente
-	{
-	case 1:
-		//programa em Lavar
-		led_lavar();
-		break;
-	case 2:
-		// programa em Enxaguar
-		led_exaguar();
-		break;
-	case 3:
-		// programa em centrifugar
-		led_centrifugar();
-		break;
-	} //end switch
-} //end void SelecaoPrograma()
+    switch (seletorPrograma) // Update corresponding program LED
+    {
+    case 1:
+        // Wash program
+        led_lavar();
+        break;
+    case 2:
+        // Rinse program
+        led_exaguar();
+        break;
+    case 3:
+        // Spin program
+        led_centrifugar();
+        break;
+    } // end switch
+} // end selecao_programa()
 
 void selecao_nivel()
 {
-	nivel.update(); 	   	//da update no botao usando a biblioteca Bounce 2
-	if (nivel.fell())   			//se o botao vai de HIGH (normal) para LOW (pressionado)
-	{
-		seletorNivel++;   		//o contador do programa aumenta 1
-		bip();
-		if (seletorNivel > 2)		//se o contador passar de 2
-		{
-			seletorNivel = 1;	//ele volta para 1
-		}
-	}
+    nivel.update();   // Update debouncer state
+    if (nivel.fell()) // If button transitions from HIGH to LOW (pressed)
+    {
+        seletorNivel++; // Increment water level counter
+        bip();
+        if (seletorNivel > 2) // Wrap around if exceeding 2
+        {
+            seletorNivel = 1;
+        }
+    }
 
-	switch (seletorNivel)  		//verifica o status do Nivel e comanda os LEDs correspondentes
-	{
-	case 1: 	// nivel Baixo
-		digitalWrite(ledNivelB, HIGH);
-		digitalWrite(ledNivelM, LOW);
-		break;
-	case 2:		// nivel Médio
-		digitalWrite(ledNivelB, LOW);
-		digitalWrite(ledNivelM, HIGH);
-		break;
-	} //end switch
-} //end void
+    switch (seletorNivel) // Update corresponding level LEDs
+    {
+    case 1: // Low level
+        digitalWrite(ledNivelB, HIGH);
+        digitalWrite(ledNivelM, LOW);
+        break;
+    case 2: // Medium level
+        digitalWrite(ledNivelB, LOW);
+        digitalWrite(ledNivelM, HIGH);
+        break;
+    } // end switch
+} // end selecao_nivel()
 
 void botao_sart()
 {
-	start.update();  			//dá update no botao
-	if (start.fell() && !botaoStart) 	//se o botao vai de HIGH (normal) para LOW (pressionado)
-	{
-		digitalWrite(ledOn, HIGH);	//acende o LED
-		bip();
-		botaoStart = true;		//torna a variável true
-	}
-} // end void
+    start.update();                  // Update debouncer state
+    if (start.fell() && !botaoStart) // If button pressed and machine not running
+    {
+        digitalWrite(ledOn, HIGH); // Turn on running LED
+        bip();
+        botaoStart = true; // Set running status to true
+    }
+} // end botao_sart()
 
 void selecao_amaciante()
 {
-	amaciante.update();				//da update no botao de amaciante usando a biblioteca Bounce2
-	if (amaciante.fell() && !usaAmaciante) 		//se o botao é pressionado E a variavel usaAmaciante é false
-	{
-		digitalWrite(ledAmaciante, HIGH);	//acende o led indicando enxague duplo e amaciante
-		bip();
-		usaAmaciante = true; 			//torna a variável true --> será usada no processo de enxague e seleção das solenoides
-		duploEnxague = true; 			//ao usar a funcao amaciante um enxague extra é adicionado
-	}
+    amaciante.update();                    // Update debouncer state
+    if (amaciante.fell() && !usaAmaciante) // If pressed and softener mode was false
+    {
+        digitalWrite(ledAmaciante, HIGH); // Turn on softener LED
+        bip();
+        usaAmaciante = true; // Enable softener and valve sequencing
+        duploEnxague = true; // Automatically add a double rinse cycle
+    }
 
-	else if (amaciante.fell() && usaAmaciante)	//se o botao é pressionado novamente
-	{
-		digitalWrite(ledAmaciante, LOW);	// desliga o led
-		bip();
-		usaAmaciante = false;			//seta ambas variaveis como false
-		duploEnxague = false;
-	}
-} // end void
+    else if (amaciante.fell() && usaAmaciante) // If pressed again while active
+    {
+        digitalWrite(ledAmaciante, LOW); // Turn off softener LED
+        bip();
+        usaAmaciante = false; // Disable softener and double rinse
+        duploEnxague = false;
+    }
+} // end selecao_amaciante()
 
 void avancar()
-//funcao usada para avancar programas. Ex: a máquina entrou no modo molho e voce quer pular ele.
+// Helper to skip stages (e.g. advance through soak cycle immediately)
 {
-	delay(1000);
-	bip(2, 150);
-	tempoAvanco = now(); 	//torna o tempoAvanco, usado nas funcoes de timer igual now(), o tempo atual,
-				//assim o programa dependente do timer deixa de ser executado
-} //end void
+    delay(1000);
+    bip(2, 150);
+    tempoAvanco = now(); // Force timer expiry so stage terminates
+} // end avancar()
 
 void seleciona_solenoides()
 {
-	/* A máquina possui 3 solenoides, uma usada para sabão e alvejante,
-	 * apenas num ciclo original de super lavagem, outra usada para
-	 * sabão em todas lavagens, e a última usada para amaciante.
-	 *
-	 * Como fiz algo mais simples, com apenas um ciclo de lavar,
-	 * liguei as solenoides 1 e 2 juntas (variável solenoide1_2).
-	 *
-	 * Além disso, se a função amaciante não for selecionada,
-	 * todas solenoides são usadas para encher a máquina em todos
-	 * os ciclos.
-	 *
-	 * Caso a função amaciante seja ativada, automaticamente também é
-	 * adicionado um segundo enxague. Assim a máquina usa apenas as
-	 * solenoides 1 e 2 para encher nos cilcos de lavagem e primeiro enxague,
-	 * usando a solenoide 3 apenas no último enxague, para adicionar o amaciante.
-	*/
+    /* The machine has 3 solenoid valves:
+     * - Solenoid 1 & 2: Main wash & bleach water valves (grouped as solenoide1_2)
+     * - Solenoid 3: Fabric softener compartment valve
+     *
+     * If softener mode is disabled, all solenoids are energized to fill faster.
+     * If softener mode is enabled, only solenoids 1 & 2 are used for wash and
+     * first rinse, and solenoid 3 is energized on the second rinse to dispense softener.
+     */
 
-	if (!usaAmaciante) 				//se nao usará amaciante, todas solenoides são ligadas para encher a máquina em todos ciclos
-	{
-		digitalWrite(solenoide1_2, HIGH); 	//liga TODAS solenoides
-		digitalWrite(solenoide3, HIGH);
-	}
+    if (!usaAmaciante) // If softener not used, open all valves for faster fill
+    {
+        digitalWrite(solenoide1_2, HIGH); // Turn on all solenoids
+        digitalWrite(solenoide3, HIGH);
+    }
 
-	if (usaAmaciante && duploEnxague) 		//se for usar amaciante onao liga solenoide do amaciante no primeiro enxague
-	{
-		digitalWrite(solenoide1_2, HIGH); 	//liga solenoides 1 e 2
-	}
+    if (usaAmaciante && duploEnxague) // First rinse: do not dispense softener
+    {
+        digitalWrite(solenoide1_2, HIGH); // Turn on solenoids 1 & 2 only
+    }
 
-	if (usaAmaciante && !duploEnxague)		//já no segundo enxague:
-	{
-		digitalWrite(solenoide3, HIGH);		//liga a solenoide 3 para jogar o amaciante
-		digitalWrite(solenoide1_2, HIGH); 	//liga as solenoides 1 e 2 e mantém a 3 ligada
-	}
-} // end void
+    if (usaAmaciante && !duploEnxague) // Second/final rinse: dispense softener
+    {
+        digitalWrite(solenoide3, HIGH);   // Turn on softener solenoid
+        digitalWrite(solenoide1_2, HIGH); // Also keep main solenoids open
+    }
+} // end seleciona_solenoides()
 
-void encher_nivel_baixo() //função para encher a máquina no nível baixo
+void encher_nivel_baixo() // Fill machine up to low water level
 {
-	setTime(0);		//zera o tempo
-	unsigned long tempoErro = (12 * 60);	//tempo de erro em 12 min: se em 12 min não encher a máquina
-												//há problema na solenoide ou na entrada de água
+    setTime(0);                          // Reset timer
+    unsigned long tempoErro = (12 * 60); // 12-minute timeout error threshold
 
-	while (!estadoChaveNivelB)		//enquanto o nível baixo não foi atingido
-	{
-		chaves_niveis();		//le o estado das chaves do pressostato
-		seleciona_solenoides();		//liga solenoides
-		delay(500);			//evitar bouncer
+    while (!estadoChaveNivelB) // While low level contact is not reached
+    {
+        chaves_niveis();        // Read pressure switch states
+        seleciona_solenoides(); // Open appropriate solenoids
+        delay(500);             // Debounce / poll delay
 
-		if (now() > tempoErro)		//se passar do tempo de erro p/ o nivel atingir o nivel baixo
-		{
-			erro = true;		//indica erro
-			tipoErro = 1;		//erro tipo 1, na entrada de água
-			erros();		//entra na função de erro, parando a máquina e indicando o erro
-		}
-		if (digitalRead(chaveStart) == LOW) 	//para avancar a funcao
-		{
-			delay(1000);
-			bip(2, 150);
-			digitalWrite(solenoide1_2, LOW);	//DESliga solenoide 1 e 2
-			digitalWrite(solenoide3, LOW);		//DESliga solenoide 3
-			break;
-		}
-	}
+        if (now() > tempoErro) // Water inlet timeout reached
+        {
+            erro = true;  // Flag error
+            tipoErro = 1; // Error type 1: water inlet failure
+            erros();      // Enter error handler
+        }
+        if (digitalRead(chaveStart) == LOW) // Button press advances/skips stage
+        {
+            delay(1000);
+            bip(2, 150);
+            digitalWrite(solenoide1_2, LOW); // Close solenoids 1 & 2
+            digitalWrite(solenoide3, LOW);   // Close solenoid 3
+            break;
+        }
+    }
 
-	if (estadoChaveNivelB) 				//quando atingir o nível baixo
-	{
-		digitalWrite(solenoide1_2, LOW);	//DESliga solenoide 1 e 2
-		digitalWrite(solenoide3, LOW);		//DESliga solenoide 3
-	}
+    if (estadoChaveNivelB) // When low level is reached
+    {
+        digitalWrite(solenoide1_2, LOW); // Close solenoids 1 & 2
+        digitalWrite(solenoide3, LOW);   // Close solenoid 3
+    }
 }
 
-void encher_nivel_medio()	//função para encher até o nível médio
+void encher_nivel_medio() // Fill machine up to medium water level
 {
-	setTime(0);					//zera o tempo
-	unsigned long tempoErro = (12 * 60);		//tempo de erro em 12 min
+    setTime(0);                          // Reset timer
+    unsigned long tempoErro = (12 * 60); // 12-minute timeout error threshold
 
-	while (!estadoChaveNivelM)			//enquanto não atingir o nível médio
-	{
-		chaves_niveis();			//le o estado das chaves do pressostato
-		seleciona_solenoides();			//liga solenoides
-		delay(500);				//evitar bouncer
+    while (!estadoChaveNivelM) // While medium level contact is not reached
+    {
+        chaves_niveis();        // Read pressure switch states
+        seleciona_solenoides(); // Open appropriate solenoids
+        delay(500);             // Debounce / poll delay
 
-		if ( (now() > tempoErro) && (!estadoChaveNivelB) ) //se passar do tempo de erro p/ o nivel atingir o nivel baixo
-		{
-			erro = true;		//indica erro
-			tipoErro = 1;		//erro tipo 1, na entrada de água
-			erros();		//entra na função de erro, parando a máquina e indicando o erro
-		}
+        if ((now() > tempoErro) && (!estadoChaveNivelB)) // Error if even low level is not reached in 12 min
+        {
+            erro = true;  // Flag error
+            tipoErro = 1; // Error type 1: water inlet failure
+            erros();      // Enter error handler
+        }
 
-		if (digitalRead(chaveStart) == LOW) 	//para avancar a funcao
-		{
-			delay(1000);
-			bip(2, 150);
-			digitalWrite(solenoide1_2, LOW);	//DESliga solenoide 1 e 2
-			digitalWrite(solenoide3, LOW);		//DESliga solenoide 3
-			break;
-		}
-
-	}
-	if (estadoChaveNivelM)				//quando atingir o nível médio
-	{
-		digitalWrite(solenoide1_2, LOW);	//DESliga solenoide 1 e 2
-		digitalWrite(solenoide3, LOW);		//DESliga solenoide 3
-	}
+        if (digitalRead(chaveStart) == LOW) // Button press advances/skips stage
+        {
+            delay(1000);
+            bip(2, 150);
+            digitalWrite(solenoide1_2, LOW); // Close solenoids 1 & 2
+            digitalWrite(solenoide3, LOW);   // Close solenoid 3
+            break;
+        }
+    }
+    if (estadoChaveNivelM) // When medium level is reached
+    {
+        digitalWrite(solenoide1_2, LOW); // Close solenoids 1 & 2
+        digitalWrite(solenoide3, LOW);   // Close solenoid 3
+    }
 }
 
-void encher() //função geral para encher, que faz uso das funções encher_nivel_baixo() e encher_nivel_medio()
+void encher() // General fill function delegating to low or medium fill routines
 {
-	switch (seletorNivel)	//identifica qual nivel está selecionado
-	{
-	case 1:		//Nivel baixo
-		encher_nivel_baixo();  //chama a função para encher
-		break;
+    switch (seletorNivel) // Check selected water level
+    {
+    case 1:                   // Low level
+        encher_nivel_baixo();
+        break;
 
-	case 2:		//Nivel medio
-		encher_nivel_medio();  //chama a função para encher
-		break;
-	} //end switch
-} //end void
+    case 2:                   // Medium level
+        encher_nivel_medio();
+        break;
+    } // end switch
+} // end encher()
 
 void bater(unsigned long tempo_min, int timeOn, int timeOff)
 {
-	/* Quando o motor está girando para um lado e logo em seguida é
- 	 * acionado para o outro lado, há um pico de corrente, aquele que
- 	 * faz as luzes incandescentes ou halógenas ficarem diminuindo
- 	 * a luminosidade, ficarem "piscando" enquanto a máquina está
- 	 * batendo a roupa.
- 	 *
- 	 * Isso não acontecia nas máquinas antigas pois o motor girava
- 	 * apenas para um lado e uma engrenagem ou qualquer sistema mecânico
- 	 * parecido fazia o agitador da máquina girar para um lado e para o
- 	 * outro. Há algumas máquinas que usam esse sistema ainda, como as
- 	 * chamadas "tanquinhos". Já nas modernas o acionamento do agitador
- 	 * é feito através de TRIACs, jogando tensão no fio que faz o motor
- 	 * girar para um lado, depois no fio que faz o motor girar para o outro.
-	 *
-	 * Por esse motivo, deve existir um delay entre quando o motor para
-	 * para de girar para um lado e começa a girar para o outro, justamente
-	 * para diminuir esses picos de corrente, que gera queda de tensão e distorções
-	 * sobre a rede. Eu tentei diminuir esse efeito usando o delay, optoacopladores
-	 * com zero crossing e também um filtro snubber na saída da placa, MAS mesmo assim
-	 * é perceptível a queda de tenão, basta ligar ua lâmpada incandescente ou halógena
-	 * (ou um multímetro) na mesma fase da máquina para perceber.
-	 *
-	 * Na prática esse delay não é percebido visualmente, pois, além de
-	 * ser pequeno, a inércia do motor não deixa ele efetivamente parar
-	 * antes de começar a girar para o outro lado.
-	 *
-	 * Na prática vi que o ideal para uma agitação forte é
-	 * o motor girar de 300 a 400 ms, com um delay de 200 ms.
-	 * Por isso nas funções de lavar ou enxaguar usei essea função com a sintaxe:
-	 * Bater(minutos, 300, 200);
-	 *
-	 * Já nas operações como bater antes do molho e bater no segundo enxague, quando
-	 * é adicionado o amaciante, usei uma agitação um pouco mais lenta:
-	 * Bater(minutos, 300, 300);
-	 *
-	 * Se o timeOn ficar acima de 400 ms, o giro é muito grande e começa embolar a roupa.
-	 */
+    /* When the motor is rotating in one direction and abruptly reversed,
+     * high inrush current spikes occur, causing line voltage dips.
+     * To protect the TRIACs/relays and minimize mains disturbances,
+     * a dead-time (timeOff) is enforced between direction changes.
+     *
+     * Empirical tuning showed:
+     * - Strong agitation: 300 to 400 ms timeOn, 200 ms timeOff.
+     * - Gentle agitation: 300 ms timeOn, 300 ms timeOff.
+     * - timeOn above 400 ms causes clothes tangling.
+     */
 
-	tempoAvanco = tempo_min * 60; 			//multiplica por 60 para dar o tempo em segundos
-	setTime(0);					//seta o tempo em 0 segundos
+    tempoAvanco = tempo_min * 60; // Convert minutes to seconds
+    setTime(0);                   // Reset timer to 0 seconds
 
-	while (now() <= tempoAvanco)			//enquanto o tempo atual (now()) não for maior que o tempo de Bater
-	{
-		digitalWrite(motorDir, HIGH);
-		delay(timeOn);				//gira o motor para direita
-		digitalWrite(motorDir, LOW);
-		delay(timeOff);				//aguarda um tempo
-		digitalWrite(motorEsq, HIGH);
-		delay(timeOn);				//gira o motor para esquerda
-		digitalWrite(motorEsq, LOW);
-		delay(timeOff);				//aguarda um pouco
+    while (now() <= tempoAvanco) // While duration has not expired
+    {
+        digitalWrite(motorDir, HIGH);
+        delay(timeOn); // Rotate motor clockwise (right)
+        digitalWrite(motorDir, LOW);
+        delay(timeOff); // Dead-time pause
+        digitalWrite(motorEsq, HIGH);
+        delay(timeOn); // Rotate motor counter-clockwise (left)
+        digitalWrite(motorEsq, LOW);
+        delay(timeOff); // Dead-time pause
 
-		if (digitalRead(chaveStart) == LOW) 	//para avancar a funcao
-		{
-			avancar();
-		}
-	}
+        if (digitalRead(chaveStart) == LOW) // Button press advances/skips stage
+        {
+            avancar();
+        }
+    }
 
-	//quando o tempo de bater passar desliga o motor
-	digitalWrite(motorEsq, LOW);
-	digitalWrite(motorDir, LOW);
-} //end void
+    // Turn off motor when agitation duration is reached
+    digitalWrite(motorEsq, LOW);
+    digitalWrite(motorDir, LOW);
+} // end bater()
 
 void drenar()
 {
-	unsigned long tempoErro = (6* 60);	//tempo de erro em 6 min
-	setTime(0);				//zera o tempo
+    unsigned long tempoErro = (6 * 60); // 6-minute drain timeout
+    setTime(0);                         // Reset timer
 
-	while (estadoChaveNivelB) 		//enquanto não desativar o nível baixo
-	{
-		chaves_niveis();
-		digitalWrite(atuadorBomba, HIGH); 	//deixa a bomba ligada
-		delay(500);				//evitar bouncer
+    while (estadoChaveNivelB) // While low level pressure switch is still triggered
+    {
+        chaves_niveis();
+        digitalWrite(atuadorBomba, HIGH); // Keep pump energized
+        delay(500);                       // Debounce / poll delay
 
-		if (now() > tempoErro)		//se passar de 6 minutos
-		{
-			erro = true;		//indica erro na bomba
-			tipoErro = 2;
-			erros();
-		}
+        if (now() > tempoErro) // Exceeded 6 minutes without draining
+        {
+            erro = true;  // Flag error
+            tipoErro = 2; // Error type 2: drainage failure
+            erros();
+        }
 
-		if (digitalRead(chaveStart) == LOW) 	//para avancar a funcao
-		{
-			delay(1000);
-			bip(2, 150);
-			digitalWrite(atuadorBomba, LOW);	//DESliga bomba
-			break;
-		}
-	}
+        if (digitalRead(chaveStart) == LOW) // Button press advances/skips stage
+        {
+            delay(1000);
+            bip(2, 150);
+            digitalWrite(atuadorBomba, LOW); // Turn off pump
+            break;
+        }
+    }
 
+    if (!estadoChaveNivelB) // Once low level contact opens
+    {
+        /* Pressure switch contacts have hysteresis; once the low level
+         * contact opens, a few additional seconds of pumping are needed
+         * to completely empty the tub. This is set to 30 seconds below.
+         */
+        tempoAvanco = 30; // 30 seconds extra drain duration
+        setTime(0);       // Reset timer
 
-	if (!estadoChaveNivelB) 	//se desativar a chave de nível baixo
-	{
-		/*
-		 * As chaves do pressostato não são instantâneas,
-		 * quanto a máquina está enchendo, ao atingir
-		 * o nível baixo, a chave é ativada, mas ela
-		 * só é desativada quando o tambor da máquina
-		 * está quase vazio.
-		 *
-		 * Portanto, após a chave do nivel baixo ser desativada
-		 * é preciso poucos segundos de drenagem para secar o
-		 * tambor da máquina. Esse tempo é setado na variável
-		 * abaixo em 30 segundos.
-		 */
-		tempoAvanco = 30; 		//tempo de drenagem, em seg, após desligar a chave do nivel baixo
-		setTime(0);			//zera o tempo
+        while (now() <= tempoAvanco) // Keep draining for the extra period
+        {
+            delay(500);
+            digitalWrite(atuadorBomba, HIGH); // Keep pump energized
+        }
+        digitalWrite(atuadorBomba, LOW); // Turn off pump when done
+    }
+} // end drenar()
 
-		while (now() <= tempoAvanco)	//enquanto o tempo atual (now()) não for maior que o tempo
-		{
-			delay(500);				//evitar bouncer
-			digitalWrite(atuadorBomba, HIGH);	//liga a bomba
-		}
-		digitalWrite(atuadorBomba, LOW);		//desliga a bomba quando o tempo passar
-	}
-} //end void
-
-void molho(unsigned long tempo_min) //função para deixar máquina parada com as roupas de molho
+void molho(unsigned long tempo_min) // Soak stage: keeps machine idle with water & clothes
 {
-	tempoAvanco = tempo_min * 60; 	//multiplica por 60 para dar o tempo em segundos
-	setTime(0);			//seta o tempo em 0 segundos
+    tempoAvanco = tempo_min * 60; // Convert minutes to seconds
+    setTime(0);                   // Reset timer to 0
 
-	while (now() <= tempoAvanco)
-	{
-		digitalWrite(motorDir, LOW);		//DESLIGA equipamentos
-		digitalWrite(motorEsq, LOW);
-		digitalWrite(atuadorBomba, LOW);
-		digitalWrite(solenoide1_2, LOW);
-		digitalWrite(solenoide3, LOW);
-		delay(1000);
+    while (now() <= tempoAvanco) {
+        digitalWrite(motorDir, LOW); // Turn off all actuators
+        digitalWrite(motorEsq, LOW);
+        digitalWrite(atuadorBomba, LOW);
+        digitalWrite(solenoide1_2, LOW);
+        digitalWrite(solenoide3, LOW);
+        delay(1000);
 
-		if (digitalRead(chaveStart) == LOW)	//para avancar a funcao
-		{
-			avancar();
-		}
-	} //end while
-} //end void
+        if (digitalRead(chaveStart) == LOW) // Button press advances/skips stage
+        {
+            avancar();
+        }
+    } // end while
+} // end molho()
 
 void centrifugar(unsigned long tempo_min, int sprint)
 {
-	/* Quando máquina centrifuga, ela inicialmente da alguns sprints,
-	 * ou seja: liga por um tempo, desligava por outro tempo, e assim por diante,
-	 *  dando uns 4 ou 5 sprints até ligar o motor e não desligar mais até o final da centrifugação.
-	 *
-	 * Provavelmente esses sprints servem, pelo que descobri com testes práticos,
-	 * para distribuir melhor a roupa dentro do cesto e evitar vibração.
-	 *
-	 * Assim é possível escolher usando a função:
-	 * Centrifugar(tempo em minutos, número de sprints iniciais)
-	 */
+    /* Spin stage initiates with short intermittent sprints to evenly distribute
+     * clothes inside the drum before continuous high-speed spinning, preventing violent vibration.
+     * Parameters: Centrifugar(duration_in_minutes, sprint_count).
+     */
 
-	tempoAvanco = tempo_min * 60; 		//multiplica por 60 para dar o tempo em minutos
-	digitalWrite(atuadorBomba, HIGH); 	//liga atuadorBomba para acoplar o tambor com o motor
-	delay(5000);				//aguarda 5 seg
+    tempoAvanco = tempo_min * 60;     // Convert minutes to seconds
+    digitalWrite(atuadorBomba, HIGH); // Engage clutch actuator and drain pump
+    delay(5000);                      // Wait 5 seconds for mechanical clutch engagement
 
-	setTime(0);				//seta o tempo em 0 segundos
+    setTime(0); // Reset timer to 0 seconds
 
+    int tempoOn = 4000;  // Initial sprint ON duration
+    int tempoOff = 4000; // Sprint OFF duration
 
-	int tempoOn = 4000;			//tempo ligado
-	int tempoOff = 4000;			//tempo desligado
+    // Execute spin sprints
+    for (int x = 0; x < sprint; x++)
+    {
+        digitalWrite(motorDir, HIGH); // Energize motor
+        delay(tempoOn);
+        digitalWrite(motorDir, LOW); // De-energize motor
+        delay(tempoOff);
 
-	// o for abaixo executa os sprints
-	for (int x = 0; x < sprint; x++)	//executa o numero de sprints
-	{
-		digitalWrite(motorDir, HIGH);	//liga motor
-		delay(tempoOn);
-		digitalWrite(motorDir, LOW);	//desliga motor
-		delay(tempoOff);
+        tempoOn -= 700; // Reduce ON time each sprint as drum builds inertia
+        if (tempoOn <= 1500) // Minimum ON time clamp = 1.5 seconds
+            tempoOn = 1500;
 
-		tempoOn -= 700;			//diminui 0,7s de tempoOn a cada sprint, pois com a inércia
-						//do tambor já girando é preciso menos força para manter a rotação
-						// e evitar vibração.
-		if (tempoOn <= 1500)		//tempoOn mínimo = 1,5 seg
-			tempoOn = 1500;
+        if (digitalRead(chaveStart) == LOW) // Button press advances/skips stage
+        {
+            bip(2, 150);
+            break;
+        }
+    } // end for
 
-		if (digitalRead(chaveStart) == LOW) 	//para avancar a funcao
-		{
-			bip(2, 150);
-			break;
-		}
-	}		//end for
+    // Continuous spin mode until timer expiry
+    while (now() <= tempoAvanco)
+    {
+        digitalWrite(motorDir, HIGH); // Keep motor spinning
 
-	// depois dos sprints o motor gira em modo contínuo até acabar o tempo
-	while (now() <= tempoAvanco)			//enquanto o tempo nao for atingido
-	{
-		digitalWrite(motorDir, HIGH);		//mantem o motor girando
+        if (digitalRead(chaveStart) == LOW) // Button press advances/skips stage
+        {
+            avancar();
+        }
+    } // end while
 
-		if (digitalRead(chaveStart) == LOW) 	//para avancar a funcao
-		{
-			avancar();
-		}
-	} //end while
+    // Spin stage termination
+    digitalWrite(motorDir, LOW);     // Turn off motor
+    delay(10000);                    // Wait 10 seconds for drum coast-down
+    digitalWrite(atuadorBomba, LOW); // Disengage clutch actuator / pump
 
-	//quando acabar o tempo de Centrifugar
-	digitalWrite(motorDir, LOW);		//desliga o motor
-	delay(10000); 				//aguarda 10 segundos
-	digitalWrite(atuadorBomba, LOW);	//desliga o atuador/bomba
-
-} //end void
+} // end centrifugar()
 
 void lavar_programa()
 {
-	//aciona o LED inicando o programa
-	led_lavar();
+    // Activate Wash indicator LED
+    led_lavar();
 
-	//Executa as funcoes
-	delay(tempoDelayEntreEtapas);
-	encher();				//Encher
-	delay(tempoDelayEntreEtapas);
-	bip();
+    // Execute Wash cycle sequence
+    delay(tempoDelayEntreEtapas);
+    encher(); // Fill water
+    delay(tempoDelayEntreEtapas);
+    bip();
 
-	bater(4, 300, 300); 			//bater por 4 min, com giro lento
-	bip();
+    bater(4, 300, 300); // Agitate 4 min, gentle mode
+    bip();
 
-	molho(30);				// Molho por 30 min
-	bip();
+    molho(30); // Soak 30 min
+    bip();
 
-	bater(15, 300, 200);			//Bater por 15 min, com giro rapido
-	delay(tempoDelayEntreEtapas);
-	bip();
+    bater(15, 300, 200); // Agitate 15 min, normal mode
+    delay(tempoDelayEntreEtapas);
+    bip();
 
-	drenar();				//drenar
-	delay(tempoDelayEntreEtapas);
-	bip();
+    drenar(); // Drain water
+    delay(tempoDelayEntreEtapas);
+    bip();
 
-	centrifugar(3, 6);			//centrigufar por 3 min com 6 sprints iniciais
-} //end void
+    centrifugar(3, 6); // Spin 3 min with 6 initial sprints
+} // end lavar_programa()
 
 void enxaguar_programa()
 {
-	//aciona o LED inicando o programa
-	led_exaguar();
+    // Activate Rinse indicator LED
+    led_exaguar();
 
-	//Executa as funcoes
-	if (!usaAmaciante)			//se o botao amaciante NAO foi pressionado há apenas um enxague
-	{
-		delay(tempoDelayEntreEtapas);
-		encher();			//Enche usando todas solenoides, selecionadas atravez da funcao Encher()
-		bip();
-		delay(tempoDelayEntreEtapas);
+    // Execute Rinse cycle sequence
+    if (!usaAmaciante) // Single rinse mode (no softener selected)
+    {
+        delay(tempoDelayEntreEtapas);
+        encher(); // Fill using all solenoids
+        bip();
+        delay(tempoDelayEntreEtapas);
 
-		bater(7, 300, 200);		//Bater por 7 min
-		bip();
-		delay(tempoDelayEntreEtapas);
+        bater(7, 300, 200); // Agitate 7 min
+        bip();
+        delay(tempoDelayEntreEtapas);
 
-		drenar();
-		//não tem Centrifugar() pois o programa faz o ciclo ir automaticamente para
-		//a centrifugação -- ver Programas()
-	}
+        drenar();
+        // Spin is chained next in executar_programas()
+    }
 
-	if (usaAmaciante && duploEnxague) 	//se usar a funcao amaciante, ela adiciona enxague extra
-	{
-		delay(tempoDelayEntreEtapas);
-		encher(); 			//Encher a primeira vez sem usar a solenoide do amaciante: solenoide3
-		bip();
-		delay(tempoDelayEntreEtapas);
+    if (usaAmaciante && duploEnxague) // Double rinse mode - First rinse
+    {
+        delay(tempoDelayEntreEtapas);
+        encher(); // Fill without softener solenoid
+        bip();
+        delay(tempoDelayEntreEtapas);
 
-		bater(5, 300, 200);		//Bater por 5 min
-		bip();
-		delay(tempoDelayEntreEtapas);
+        bater(5, 300, 200); // Agitate 5 min
+        bip();
+        delay(tempoDelayEntreEtapas);
 
-		drenar();
-		bip();
-		delay(tempoDelayEntreEtapas);
+        drenar();
+        bip();
+        delay(tempoDelayEntreEtapas);
 
-		centrifugar(2, 5);		//centrifugar primeiro enxague
+        centrifugar(2, 5); // Spin intermediate rinse (2 min, 5 sprints)
 
-		duploEnxague = false; 		//seta a variavel como false para o ultimo enxague
-	}
+        duploEnxague = false; // Flag ready for final rinse with softener
+    }
 
-	if (usaAmaciante && !duploEnxague) 	//ultimo enxague
-	{
-		delay(tempoDelayEntreEtapas);
-		encher(); 			//Encher para amaciar usando primeiro a solenoide do amaciante
-		bip();
-		delay(tempoDelayEntreEtapas);
+    if (usaAmaciante && !duploEnxague) // Double rinse mode - Second/Final rinse with softener
+    {
+        delay(tempoDelayEntreEtapas);
+        encher(); // Fill dispensing softener
+        bip();
+        delay(tempoDelayEntreEtapas);
 
-		bater(2, 300, 300);		//Bater por 3 min
-		bip();
+        bater(2, 300, 300); // Agitate 2 min
+        bip();
 
-		molho(5);
-		bip();
+        molho(5); // Softener soak 5 min
+        bip();
 
-		bater(2, 300,200);
-		bip();
-		delay(tempoDelayEntreEtapas);
+        bater(2, 300, 200); // Agitate 2 min
+        bip();
+        delay(tempoDelayEntreEtapas);
 
-		drenar();
-		//não tem Centrifugar() pois o programa faz o ciclo ir automaticamente para
-		//a centrifugação --> ver executar_programas()
-	}
-} //end void
+        drenar();
+        // Spin is chained next in executar_programas()
+    }
+} // end enxaguar_programa()
 
 void centrifugar_programa()
 {
-	//aciona o LED inicando o programa
-	led_centrifugar();
+    // Activate Spin indicator LED
+    led_centrifugar();
 
-	//Executa a funcao
-	if (estadoChaveNivelB) 		// se a máquina foi deixada parada e está com água
-	{
-		drenar();		// ela primeiro drena.
-	}
-	centrifugar(4, 6);		//centrifugar por 4 min
-} //end void
+    // If machine was paused with water, drain first
+    if (estadoChaveNivelB)
+    {
+        drenar();
+    }
+    centrifugar(4, 6); // Spin 4 min with 6 sprints
+} // end centrifugar_programa()
 
 void erros()
 {
-	//Se algum erro acontecer o programa entra em loop infinito
-	//e fica indicando o erro no painel.
-	//Para voltar a usar a máquina é preciso desligar e ligar novamente
-	//através da chave física no painel.
+    // If an error occurs, halt all actuators and loop indefinitely
+    // blinking the corresponding error code on panel LEDs.
+    // Recovery requires power-cycling the machine.
 
-	while (erro)	//se algum erro acontecer
-	{
-		//desliga todos equipamentos
-		digitalWrite(motorDir, LOW);
-		digitalWrite(motorEsq, LOW);
-		digitalWrite(atuadorBomba, LOW);
-		digitalWrite(solenoide1_2, LOW);
-		digitalWrite(solenoide3, LOW);
+    while (erro)
+    {
+        // Turn off all actuators
+        digitalWrite(motorDir, LOW);
+        digitalWrite(motorEsq, LOW);
+        digitalWrite(atuadorBomba, LOW);
+        digitalWrite(solenoide1_2, LOW);
+        digitalWrite(solenoide3, LOW);
 
-		if (tipoErro == 1)	//erro nas solenoides ou entrada de água
-		{
-			// apita e pisca as luzes dos niveis
-			bip();
-			digitalWrite(ledNivelB, HIGH);
-			digitalWrite(ledNivelM, HIGH);
-			delay(1000);
+        if (tipoErro == 1) // Error Type 1: Water inlet / solenoid failure
+        {
+            // Beep and blink water level LEDs
+            bip();
+            digitalWrite(ledNivelB, HIGH);
+            digitalWrite(ledNivelM, HIGH);
+            delay(1000);
 
+            digitalWrite(ledNivelB, LOW);
+            digitalWrite(ledNivelM, LOW);
+            delay(1000);
+        }
 
-			digitalWrite(ledNivelB, LOW);
-			digitalWrite(ledNivelM, LOW);
-			delay(1000);
-		}
+        if (tipoErro == 2) // Error Type 2: Drain pump failure
+        {
+            // Beep and blink program LEDs
+            bip();
+            digitalWrite(ledCentrifugar, HIGH);
+            digitalWrite(ledEnxaguar, HIGH);
+            digitalWrite(ledLavar, HIGH);
+            delay(1000);
 
-		if (tipoErro == 2)	//erro na bomba
-		{
-			// apita e pisca as luzes dos programas
-			bip();
-			digitalWrite(ledCentrifugar, HIGH);
-			digitalWrite(ledEnxaguar, HIGH);
-			digitalWrite(ledLavar, HIGH);
-			delay(1000);
-
-
-			digitalWrite(ledCentrifugar, LOW);
-			digitalWrite(ledEnxaguar, LOW);
-			digitalWrite(ledLavar, LOW);
-			delay(1000);
-		}
-	} //end while infinito
-} //end void
+            digitalWrite(ledCentrifugar, LOW);
+            digitalWrite(ledEnxaguar, LOW);
+            digitalWrite(ledLavar, LOW);
+            delay(1000);
+        }
+    } // end while
+} // end erros()
 
 void executar_programas()
 {
+    switch (seletorPrograma) // Check selected program
+    {
+    case 1:                // Wash Program
+        while (botaoStart) // While running flag is true
+        {
+            lavar_programa(); // Run wash cycle
+            bip(1, 300);
+            enxaguar_programa(); // Follow with rinse cycle
+            bip(1, 300);
+            centrifugar_programa();   // Finish with spin cycle
+            bip(3, 2000);             // Completion acoustic alert
+            digitalWrite(ledOn, LOW); // Turn off running LED
 
-	switch (seletorPrograma)			//verifica o valor da variavel
-	{
-	case 1: //Programa em Lavar
-		while (botaoStart) 			//enquanto botaoStart == true, ou seja, quando o botao é pressionado
-		{
-			lavar_programa();		//executa o programa de lavar
-			bip(1, 300);
-			enxaguar_programa();		//na sequencia o programa de enxaguar
-			bip(1, 300);
-			centrifugar_programa();		//por ultimo o programa de centrifugar
-			bip(3, 2000);			//aviso sonoro indicando final
-			digitalWrite(ledOn, LOW);	//desliga o LED on
+            botaoStart = false; // Reset start flag to prevent re-triggering
+        }
+        break;
 
-			botaoStart = false;		//coloca a variavel como falsa, para o arduino nao entrar em loop
-							//e ficar executando o programa novamente quando chegar ao fim
-		}
-		break; //nao faz mais nada
+    case 2: // Rinse Program
+        while (botaoStart) {
+            enxaguar_programa(); // Start directly at rinse
+            bip(1, 300);
+            centrifugar_programa();
+            bip(3, 2000);
+            digitalWrite(ledOn, LOW);
 
-	case 2:	//Programa em Enxaguar
-		while (botaoStart)
-		{
-			enxaguar_programa();		//inicia já no programa de enxaguar
-			bip(1, 300);
-			centrifugar_programa();
-			bip(3, 2000);
-			digitalWrite(ledOn, LOW);
+            botaoStart = false;
+        }
+        break;
 
-			botaoStart = false;
-		}
-		break;
+    case 3: // Spin Program
+        while (botaoStart) {
+            centrifugar_programa(); // Start directly at spin
+            bip(3, 2000);
+            digitalWrite(ledOn, LOW);
 
-	case 3:		//Programa em Centrifugar
-		while (botaoStart)
-		{
-			centrifugar_programa();		//inicia já em centrifugar
-			bip(3, 2000);
-			digitalWrite(ledOn, LOW);
-
-			botaoStart = false;
-		}
-		break;
-	} //end switch
-} //end void
+            botaoStart = false;
+        }
+        break;
+    } // end switch
+} // end executar_programas()
 
 void loop()
 {
+    botao_sart();         // Check start button
+    selecao_nivel();      // Check water level selection
+    selecao_amaciante();  // Check softener selection
+    selecao_programa();   // Check program selection
+    chaves_niveis();      // Read pressure switch levels
+    executar_programas(); // Execute active cycle if started
 
-	botao_sart();		//chama a funcao que ativa o botao Start
-	selecao_nivel();	//chama a funcao que seleciona o nivel
-	selecao_amaciante();	//chama a funcao que seleciona ou nao amaciante (e enxague extra)
-	selecao_programa();	//chama funcao que seleciona o programa
-	chaves_niveis();	//lê as chaves de níveis do pressostato
-	executar_programas();	//função que executa os programas selecionados.
-
-
-} //end loop
+} // end loop

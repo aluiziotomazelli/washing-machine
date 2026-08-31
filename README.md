@@ -1,64 +1,67 @@
 # 🧺 Washing Machine Custom Controller: From Spaghetti to Clean C++
 
-> Uma jornada prática de engenharia de software embarcado: restaurando uma lavadora de roupas e transformando um código monolítico/legado em uma arquitetura C++ moderna, modular, não-bloqueante e testável no PC (Host Unit Tests).
+> A practical embedded software engineering case study: restoring an old washing machine and refactoring legacy monolithic Arduino firmware into a modern, modular, non-blocking C++ architecture with native PC unit testing (Host Tests).
 
 ---
 
-## 📖 Sobre o Projeto
+## 📖 About the Project
 
-Este projeto nasceu da restauração de uma lavadora de roupas antiga cuja placa controladora original havia queimado. O controle original foi substituído por uma placa de desenvolvimento microcontrolada (Arduino / ATmega328P).
+This project originates from the restoration of an old domestic washing machine whose original electronic control board failed. The original controller was replaced with an ATmega328P microcontroller board (Arduino Pro Mini / Nano).
 
-O firmware inicial (**v0.1.0**) cumpria o seu papel de lavar as roupas, mas apresentava as limitações clássicas de projetos Arduino prototipados rapidamente:
-- Código monolítico em um único arquivo `.ino`.
-- Uso intensivo de laços `while()` e chamadas bloqueantes `delay()`.
-- Variáveis globais compartilhadas sem proteção ou encapsulamento.
-- Impossibilidade de ler sensores em tempo real (como acelerômetro de vibração) durante a execução de um ciclo.
-- Ausência de testes automatizados (qualquer alteração exigia testar diretamente na máquina física).
+The initial baseline firmware (**v0.1.0**) successfully ran the wash cycles, but exhibited common limitations of quick Arduino prototypes:
+- Monolithic code inside a single `.ino` file.
+- Heavy reliance on blocking `while()` loops and `delay()` calls.
+- Shared global state without encapsulation or protection.
+- Inability to read real-time sensors (such as an I2C vibration accelerometer) during cycle execution.
+- Absence of automated tests (every firmware change required testing directly on physical hardware).
 
-Este repositório documenta passo a passo a **evolução arquitetural** desse firmware.
+This repository documents the step-by-step **architectural refactoring** of this firmware into a production-grade embedded C++ codebase.
 
 ---
 
-## 🗺️ Roadmap de Evolução & Releases
+## 🗺️ Evolution Roadmap & Releases
 
-A evolução do projeto está dividida em marcos arquiteturais com tags Git e Releases detalhadas:
+The project's architectural evolution is structured into milestones with dedicated Git tags and releases:
 
-| Versão | Marco Arquitetural | Descrição |
+| Version | Milestone | Description |
 | :---: | :--- | :--- |
-| **`v0.1.0`** | 🍝 **Legacy Spaghetti (Baseline)** | Código original monolítico `.ino`, laços bloqueantes e estado global. |
-| **`v0.2.0`** | 🔌 **Hardware Abstraction Layer (HAL)** | Isolamento de hardware via interfaces C++ (`IActuators`, `ISensors`) e travas de segurança (*dead-time* do motor contra curto de reversão). |
-| **`v0.3.0`** | ⚙️ **Non-Blocking FSM** | Máquina de Estados Finita não-bloqueante baseada em eventos e `millis()`, eliminando todo `delay()`. |
-| **`v0.4.0`** | 🧪 **Host Unit Testing (Linux/PC)** | Testes unitários com *Mocks* compilados nativamente no Linux (`g++`), validando tempos, timeouts e transições em milissegundos. |
-| **`v0.5.0`** | 🚨 **I2C Watchdog & WS2812B** | Monitoramento de desbalanceamento por acelerômetro I2C e simplificação de 7 LEDs para 1 pino de LED endereçável. |
-| **`v1.0.0`** | 🚀 **Production Modern C++** | Firmware final robusto, documentado e pronto para produção. |
+| **`v0.1.0`** | 🍝 **Legacy Spaghetti (Baseline)** | Original monolithic `.ino` firmware, blocking delays, and global state. |
+| **`v0.2.0`** | 🔌 **Hardware Abstraction Layer (HAL)** | Hardware isolation via pure C++ interfaces (`IActuators`, `ISensors`) and safety locks (motor *dead-time* preventing reversal short circuits). |
+| **`v0.3.0`** | ⚙️ **Non-Blocking FSM** | Event-driven Finite State Machine powered by `millis()`, eliminating all `delay()` and blocking loops. |
+| **`v0.4.0`** | 🧪 **Host Unit Testing (Linux/PC)** | Automated unit test suite using *Mocks* compiled natively with `g++`, validating cycles and timeout fail-safes in milliseconds. |
+| **`v0.5.0`** | 🚨 **I2C Watchdog & WS2812B** | Real-time out-of-balance detection via I2C accelerometer and migration of 7 indicator LEDs to a single addressable RGB LED line. |
+| **`v1.0.0`** | 🚀 **Production Modern C++** | Robust, fully documented, clean C++ firmware ready for deployment. |
 
 ---
 
-## 🛠️ Como Compilar e Testar
+## 🛠️ How to Build and Test
 
-O projeto foi desenhado para ser **100% amigável para a comunidade Arduino**, sem exigir ferramentas proprietárias ou configurações complexas.
+The project is structured to be **100% accessible to the Arduino community** without requiring proprietary tools or complex toolchains.
 
-### 1. No Arduino IDE (Interface Gráfica)
-1. Abra o arquivo `washing-machine.ino` diretamente no Arduino IDE.
-2. Selecione a placa (**Arduino Nano** ou **Arduino Pro Mini** - ATmega328P, 5V, 16MHz).
-3. Clique em **Verificar** / **Carregar**.
+### 1. In Arduino IDE (Graphical Interface)
+1. Open the [`washing-machine.ino`](washing-machine.ino) sketch in the Arduino IDE.
+2. Select your board (**Arduino Pro or Pro Mini** / **Arduino Nano** - ATmega328P, 5V, 16MHz).
+3. Click **Verify** / **Upload**.
 
-### 2. Via Terminal / VS Code / Antigravity (`arduino-cli` e `Makefile`)
-Se estiver no Linux/Ubuntu:
+### 2. Via Terminal / VS Code / Antigravity (`arduino-cli` and `Makefile`)
+On Linux / macOS:
 
 ```bash
-# Compilar o firmware do Arduino:
+# Build the Arduino firmware (verbose output):
 make build
 
-# Gravar na placa via USB:
-make flash PORT=/dev/ttyUSB0
+# Flash firmware to the board via USB serial (e.g. FTDI):
+make flash PORT=/dev/ttyUSB1
 
-# Executar a suíte de Host Tests no PC (usando g++ nativo):
+# Run the native Host Unit Tests on your PC (using g++):
 make test
+
+# Generate compilation database for IDE IntelliSense:
+make compile-db
 ```
 
 ---
 
-## 📸 Fotos e Esquemáticos da Placa
+## 📸 Schematics and Hardware Photos
 
-Consulte a pasta [`docs/`](docs/) para ver os esquemáticos elétricos, ligação do pressostato e fotos da placa de potência montada.
+Refer to the [`docs/`](docs/) directory for electrical schematics, pressure switch wiring diagrams, and photos of the assembled power/relay control board.

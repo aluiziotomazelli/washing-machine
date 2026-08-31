@@ -9,8 +9,9 @@ build/
 *.out
 test_runner
 
-# Editor / IDE
+# Editor / IDE / Caches
 .vscode/
+.cache/
 compile_commands.json
 
 # OS specific
