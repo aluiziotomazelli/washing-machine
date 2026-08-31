@@ -9,6 +9,9 @@ build/
 *.out
 test_runner
 
+# Test libraries (downloaded on demand)
+test/lib/
+
 # Editor / IDE / Caches
 .vscode/
 .cache/

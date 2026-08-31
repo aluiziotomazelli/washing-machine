@@ -8,13 +8,20 @@ BUILD_DIR = build
 LIBS_DIR = libraries
 SKETCH = washing-machine.ino
 
-CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -Isrc -Itest -DHOST_TEST
+# Host Compiler & GoogleTest / GoogleMock settings
+HOST_CXX = g++
+GOOGLETEST_DIR = test/lib/googletest
+GTEST_DIR = $(GOOGLETEST_DIR)/googletest
+GMOCK_DIR = $(GOOGLETEST_DIR)/googlemock
 
-TEST_SRC = $(wildcard test/*.cpp) $(wildcard src/core/*.cpp)
+GMOCK_INC = -I$(GTEST_DIR)/include -I$(GTEST_DIR) -I$(GMOCK_DIR)/include -I$(GMOCK_DIR)
+GMOCK_SRC = $(GTEST_DIR)/src/gtest-all.cc $(GMOCK_DIR)/src/gmock-all.cc $(GMOCK_DIR)/src/gmock_main.cc
+
+HOST_CXXFLAGS = -std=c++17 -Wall -Wextra -pthread -Isrc -Itest $(GMOCK_INC) -DHOST_TEST
+TEST_SRC = $(wildcard test/*.cpp) $(wildcard src/ui/*.cpp) $(wildcard src/core/*.cpp)
 TEST_BIN = $(BUILD_DIR)/test_runner
 
-.PHONY: all build flash test clean compile-db
+.PHONY: all build flash test clean compile-db setup-gtest
 
 all: build
 
@@ -36,17 +43,23 @@ compile-db:
 	arduino-cli compile --fqbn $(FQBN) --libraries $(LIBS_DIR) --build-path $(BUILD_DIR) --only-compilation-database .
 
 # ------------------------------------------------------------------------------
-# Native Host Unit Tests (via g++)
+# Native Host Unit Tests (GoogleTest & GoogleMock)
 # ------------------------------------------------------------------------------
-test:
+setup-gtest: $(GOOGLETEST_DIR)
+
+$(GOOGLETEST_DIR):
+	@mkdir -p test/lib
+	@echo "==> Downloading GoogleTest / GoogleMock (v1.14.0) into test/lib/..."
+	@curl -fsSL https://github.com/google/googletest/archive/refs/tags/v1.14.0.tar.gz | tar -xz -C test/lib
+	@mv test/lib/googletest-1.14.0 $(GOOGLETEST_DIR)
+	@echo "==> GoogleTest & GoogleMock setup complete."
+
+test: $(GOOGLETEST_DIR)
 	@mkdir -p $(BUILD_DIR)
-	@if [ -n "$(wildcard test/*.cpp)" ]; then \
-		echo "==> Building and running Host Unit Tests (g++)..."; \
-		$(CXX) $(CXXFLAGS) $(TEST_SRC) -o $(TEST_BIN); \
-		./$(TEST_BIN); \
-	else \
-		echo "==> No host tests found in test/ yet. Create tests to run."; \
-	fi
+	@echo "==> Compiling Host Unit Tests with GoogleTest & GoogleMock..."
+	$(HOST_CXX) $(HOST_CXXFLAGS) $(GMOCK_SRC) $(TEST_SRC) -o $(TEST_BIN)
+	@echo "==> Running Host Unit Tests..."
+	@./$(TEST_BIN)
 
 clean:
 	@echo "==> Cleaning build directory..."
