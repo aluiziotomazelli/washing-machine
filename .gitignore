@@ -9,9 +9,9 @@ build/
 *.out
 test_runner
 
-# Editor / Compilation Database
+# Editor / IDE
+.vscode/
 compile_commands.json
-.vscode/.browse.c_cpp.db*
 
 # OS specific
 .DS_Store
