@@ -8,6 +8,9 @@
 
 This project originates from the restoration of an old domestic washing machine whose original electronic control board failed. The original controller was replaced with an ATmega328P microcontroller board (Arduino Pro Mini / Nano).
 
+The original hardware restoration and history were detailed in the 2017 Medium article (in Portuguese):
+🔗 **[Control a washing machine with Arduino (Medium, 2017 - Original in Portuguese)](https://medium.com/@aluiziotomazelli/controlando-uma-lavadora-de-roupas-com-arduino-b4aeb57a2abd)**
+
 The initial baseline firmware (**v0.1.0**) successfully ran the wash cycles, but exhibited common limitations of quick Arduino prototypes:
 - Monolithic code inside a single `.ino` file.
 - Heavy reliance on blocking `while()` loops and `delay()` calls.
