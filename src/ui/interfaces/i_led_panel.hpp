@@ -5,6 +5,7 @@
 
 namespace ui {
 
+using domain::MachineState;
 using domain::WashProgram;
 using domain::WashStage;
 using domain::WaterLevel;
@@ -28,9 +29,9 @@ public:
     virtual void update() = 0;
 
     /**
-     * @brief Control the machine running / power indicator.
+     * @brief Update the machine macro state for visual feedback (IDLE, RUNNING, PAUSED, ERROR, FINISHED).
      */
-    virtual void set_power(bool on) = 0;
+    virtual void set_machine_state(domain::MachineState state) = 0;
 
     /**
      * @brief Control the softener mode indicator.
@@ -51,11 +52,6 @@ public:
      * @brief Update the selected water level indicator.
      */
     virtual void set_selected_level(WaterLevel level) = 0;
-
-    /**
-     * @brief Set or clear error visual alarm.
-     */
-    virtual void set_error(bool error) = 0;
 
     /**
      * @brief Turn off all indicators immediately.

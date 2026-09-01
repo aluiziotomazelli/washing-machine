@@ -30,7 +30,7 @@ void PanelController::init()
     led_panel_.set_program(selected_program_);
     led_panel_.set_selected_level(selected_level_);
     led_panel_.set_softener(softener_enabled_);
-    led_panel_.set_power(true);
+    led_panel_.set_machine_state(domain::MachineState::IDLE);
 
     buzzer_.beep(50);
 }
@@ -170,28 +170,22 @@ void PanelController::sync_state_with_coordinator()
     domain::WashStage current_stage = coordinator_.get_current_stage();
 
     if (prev_state_ != current_state) {
+        led_panel_.set_machine_state(current_state);
+
         if (current_state == domain::MachineState::FINISHED) {
             buzzer_.play_pattern(BuzzerPattern::CYCLE_FINISHED);
             led_panel_.set_stage(domain::WashStage::IDLE);
             led_panel_.set_program(selected_program_);
-            led_panel_.set_power(true);
         }
         else if (current_state == domain::MachineState::ERROR) {
             buzzer_.play_pattern(BuzzerPattern::ERROR_ALARM);
-            led_panel_.set_error(true);
         }
         else if (current_state == domain::MachineState::IDLE) {
             led_panel_.set_stage(domain::WashStage::IDLE);
             led_panel_.set_program(selected_program_);
-            led_panel_.set_power(true);
         }
         else if (current_state == domain::MachineState::RUNNING) {
-            led_panel_.set_power(true);
             led_panel_.set_stage(current_stage);
-        }
-
-        if (prev_state_ == domain::MachineState::ERROR && current_state != domain::MachineState::ERROR) {
-            led_panel_.set_error(false);
         }
 
         prev_state_ = current_state;

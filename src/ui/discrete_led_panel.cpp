@@ -50,7 +50,7 @@ void DiscreteLedPanel::update()
         return;
     }
 
-    if (!is_blinking_wash_ && !is_blinking_error_) {
+    if (!is_blinking_wash_ && !is_blinking_error_ && !is_blinking_power_) {
         return;
     }
 
@@ -67,12 +67,11 @@ void DiscreteLedPanel::update()
             write_pin(pins_.level_low, blink_state_);
             write_pin(pins_.level_med, blink_state_);
         }
-    }
-}
 
-void DiscreteLedPanel::set_power(bool on)
-{
-    write_pin(pins_.power, on);
+        if (is_blinking_power_) {
+            write_pin(pins_.power, blink_state_);
+        }
+    }
 }
 
 void DiscreteLedPanel::set_softener(bool enabled)
@@ -178,17 +177,39 @@ void DiscreteLedPanel::set_selected_level(WaterLevel level)
     }
 }
 
-void DiscreteLedPanel::set_error(bool error)
+void DiscreteLedPanel::set_machine_state(MachineState state)
 {
-    is_blinking_error_ = error;
-    if (error) {
+    switch (state) {
+    case MachineState::IDLE:
+    case MachineState::FINISHED:
+        is_blinking_power_ = false;
+        is_blinking_error_ = false;
+        write_pin(pins_.power, false);
+        break;
+
+    case MachineState::RUNNING:
+        is_blinking_power_ = false;
+        is_blinking_error_ = false;
+        write_pin(pins_.power, true);
+        break;
+
+    case MachineState::PAUSED:
+        is_blinking_power_ = true;
+        is_blinking_error_ = false;
         blink_state_ = true;
         last_blink_time_ms_ = timer_hal_.get_time_ms();
+        write_pin(pins_.power, true);
+        break;
+
+    case MachineState::ERROR:
+        is_blinking_power_ = false;
+        is_blinking_error_ = true;
+        blink_state_ = true;
+        last_blink_time_ms_ = timer_hal_.get_time_ms();
+        write_pin(pins_.power, false);
         write_pin(pins_.level_low, true);
         write_pin(pins_.level_med, true);
-    } else {
-        write_pin(pins_.level_low, false);
-        write_pin(pins_.level_med, false);
+        break;
     }
 }
 
@@ -196,6 +217,7 @@ void DiscreteLedPanel::turn_off_all()
 {
     is_blinking_wash_ = false;
     is_blinking_error_ = false;
+    is_blinking_power_ = false;
 
     write_pin(pins_.power, false);
     write_pin(pins_.softener, false);

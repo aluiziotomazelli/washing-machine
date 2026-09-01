@@ -48,12 +48,11 @@ public:
     void init() override;
     void update() override;
 
-    void set_power(bool on) override;
+    void set_machine_state(domain::MachineState state) override;
     void set_softener(bool enabled) override;
     void set_program(WashProgram program) override;
     void set_stage(WashStage stage) override;
     void set_selected_level(WaterLevel level) override;
-    void set_error(bool error) override;
     void turn_off_all() override;
 
 private:
@@ -68,6 +67,7 @@ private:
     WashProgram current_program_{WashProgram::NORMAL_WASH};
     bool is_blinking_wash_{false};
     bool is_blinking_error_{false};
+    bool is_blinking_power_{false};
     bool blink_state_{false};
     uint32_t last_blink_time_ms_{0};
 

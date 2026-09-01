@@ -51,14 +51,27 @@ TEST_F(DiscreteLedPanelTest, InitializesAllPinsToOutputAndOff)
 
 TEST_F(DiscreteLedPanelTest, ControlsPowerAndSoftenerIndicators)
 {
+    // RUNNING turns power LED ON
     EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_HIGH)).Times(1);
-    panel.set_power(true);
+    panel.set_machine_state(domain::MachineState::RUNNING);
 
+    // Softener controls softener LED
     EXPECT_CALL(mock_gpio, set_level(pin_softener, hal::GpioLevel::LEVEL_HIGH)).Times(1);
     panel.set_softener(true);
 
+    // IDLE turns power LED OFF
     EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_LOW)).Times(1);
-    panel.set_power(false);
+    panel.set_machine_state(domain::MachineState::IDLE);
+
+    // PAUSED blinks power LED
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1000));
+    EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    panel.set_machine_state(domain::MachineState::PAUSED);
+
+    // After 500ms -> toggles to LOW
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1500));
+    EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    panel.update();
 }
 
 TEST_F(DiscreteLedPanelTest, SetsProgramsDuringIdleSelection)
