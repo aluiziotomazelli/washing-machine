@@ -9,8 +9,7 @@ PanelController::PanelController(
     IButton& btn_softener,
     ILedPanel& led_panel,
     IBuzzer& buzzer,
-    fsm::WashCycleCoordinator& coordinator
-)
+    fsm::WashCycleCoordinator& coordinator)
     : btn_start_pause_(btn_start_pause)
     , btn_program_(btn_program)
     , btn_water_level_(btn_water_level)
@@ -24,14 +23,13 @@ PanelController::PanelController(
 void PanelController::init()
 {
     // Default initial selections
-    selected_program_ = domain::WashProgram::NORMAL_WASH;
+    selected_program_ = domain::WashProgram::RINSE_ONLY;
     selected_level_ = domain::WaterLevel::LOW_LEVEL;
     softener_enabled_ = false;
 
     led_panel_.set_program(selected_program_);
     led_panel_.set_selected_level(selected_level_);
     led_panel_.set_softener(softener_enabled_);
-    led_panel_.set_stage(domain::WashStage::IDLE);
     led_panel_.set_power(true);
 
     buzzer_.beep(50);
@@ -78,10 +76,12 @@ void PanelController::handle_start_pause_click(ButtonClickType click)
         if (state == domain::MachineState::IDLE || state == domain::MachineState::FINISHED) {
             coordinator_.start_cycle(selected_program_, selected_level_, softener_enabled_);
             buzzer_.beep(50);
-        } else if (state == domain::MachineState::RUNNING) {
+        }
+        else if (state == domain::MachineState::RUNNING) {
             coordinator_.pause_cycle();
             buzzer_.play_pattern(BuzzerPattern::DOUBLE_BEEP);
-        } else if (state == domain::MachineState::PAUSED) {
+        }
+        else if (state == domain::MachineState::PAUSED) {
             coordinator_.resume_cycle();
             buzzer_.beep(50);
         }
@@ -143,7 +143,8 @@ void PanelController::handle_water_level_click()
     // Toggle between LOW_LEVEL and MEDIUM_LEVEL (HIGH_LEVEL is disabled on this PCB)
     if (selected_level_ == domain::WaterLevel::LOW_LEVEL) {
         selected_level_ = domain::WaterLevel::MEDIUM_LEVEL;
-    } else {
+    }
+    else {
         selected_level_ = domain::WaterLevel::LOW_LEVEL;
     }
 
@@ -174,14 +175,17 @@ void PanelController::sync_state_with_coordinator()
             led_panel_.set_stage(domain::WashStage::IDLE);
             led_panel_.set_program(selected_program_);
             led_panel_.set_power(true);
-        } else if (current_state == domain::MachineState::ERROR) {
+        }
+        else if (current_state == domain::MachineState::ERROR) {
             buzzer_.play_pattern(BuzzerPattern::ERROR_ALARM);
             led_panel_.set_error(true);
-        } else if (current_state == domain::MachineState::IDLE) {
+        }
+        else if (current_state == domain::MachineState::IDLE) {
             led_panel_.set_stage(domain::WashStage::IDLE);
             led_panel_.set_program(selected_program_);
             led_panel_.set_power(true);
-        } else if (current_state == domain::MachineState::RUNNING) {
+        }
+        else if (current_state == domain::MachineState::RUNNING) {
             led_panel_.set_power(true);
             led_panel_.set_stage(current_stage);
         }
@@ -192,7 +196,8 @@ void PanelController::sync_state_with_coordinator()
 
         prev_state_ = current_state;
         prev_stage_ = current_stage;
-    } else if (current_state == domain::MachineState::RUNNING && prev_stage_ != current_stage) {
+    }
+    else if (current_state == domain::MachineState::RUNNING && prev_stage_ != current_stage) {
         led_panel_.set_stage(current_stage);
         prev_stage_ = current_stage;
     }
