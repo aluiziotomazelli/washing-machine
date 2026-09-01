@@ -162,7 +162,40 @@ We configured [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) with aut
 ---
 
 ## Chapter 4: Actuator Safety, Motor Dead-Time & Interlocks
-*(Coming next: Implementing software interlocks to prevent simultaneous motor direction firing and enforced dead-time before TRIAC reversal).*
+
+Controlling high-power AC inductive loads (such as an AC wash motor, drain pump, brake clutch, and solenoid water valves) requires strict hardware and software safety guarantees.
+
+```mermaid
+stateDiagram-v2
+    [*] --> STOPPED
+    
+    STOPPED --> RUNNING_CLOCKWISE: rotate_clockwise()
+    STOPPED --> RUNNING_COUNTER_CLOCKWISE: rotate_counter_clockwise()
+    
+    RUNNING_CLOCKWISE --> STOPPED: stop()
+    RUNNING_COUNTER_CLOCKWISE --> STOPPED: stop()
+    
+    RUNNING_CLOCKWISE --> DEAD_TIME_WAIT: rotate_counter_clockwise() [Turn OFF CW]
+    RUNNING_COUNTER_CLOCKWISE --> DEAD_TIME_WAIT: rotate_clockwise() [Turn OFF CCW]
+    
+    DEAD_TIME_WAIT --> RUNNING_COUNTER_CLOCKWISE: After dead_time_ms expires
+    DEAD_TIME_WAIT --> RUNNING_CLOCKWISE: After dead_time_ms expires
+    DEAD_TIME_WAIT --> STOPPED: stop() [Emergency cancel]
+```
+
+### 1. General Binary Loads: `DigitalOutput` & Intrusive Linked List
+Single-pin binary actuators (inlet valves, drain pump, clutch actuator, buzzer) are controlled via [`hal::DigitalOutput`](../src/hal/digital_output.hpp):
+- **Intrusive Linked List Pattern:** Objects register themselves into a static linked list during construction without using dynamic memory (`new` / `malloc` / `std::vector`), allowing global batch operations (`DigitalOutput::init_all()`, `DigitalOutput::turn_off_all()`).
+- **Active-Low vs Active-High Support:** Seamlessly drives direct-logic outputs and inverted relay modules.
+- **Safety Decision (Exclusion of `turn_on_all`):** Turning on all physical loads simultaneously in an appliance (filling valves, heater, pump, and spin motor at once) could cause power surges or domestic breaker trips. Thus, only batch *turn-off* (`turn_off_all()`) is supported for fail-safe emergency shutdowns.
+
+### 2. Bidirectional AC Motor: `ReversibleMotor`
+A reversible AC induction motor possesses two independent windings (Clockwise / Right and Counter-Clockwise / Left). Energizing both windings simultaneously creates a violent phase short-circuit across the TRIACs/relays.
+
+[`hal::ReversibleMotor`](../src/hal/reversible_motor.hpp) enforces safety through software:
+1. **Mutual Exclusion:** Before setting either direction pin to active level, the opposing direction pin is unconditionally forced to `LEVEL_LOW`.
+2. **Non-Blocking Dead-Time:** When reversing from Clockwise to Counter-Clockwise (or vice-versa), both pins are immediately de-energized, and the driver enters `DEAD_TIME_WAIT`. The new direction is energized only after the configured dead-time window (e.g. 200 ms) has elapsed.
+3. **Emergency Stop Override:** Calling `stop()` during a dead-time window immediately aborts the pending rotation, ensuring the motor stays safely stopped.
 
 ---
 
@@ -173,3 +206,4 @@ We configured [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) with aut
 
 ## Chapter 6: Hardware Portability & Next-Gen Peripherals (ESP32-C3 & I2C)
 *(Coming soon: Integrating I2C vibration watchdog and addressable RGB LEDs).*
+
