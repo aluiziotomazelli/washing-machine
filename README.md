@@ -9,7 +9,7 @@
 This project originates from the restoration of an old domestic washing machine whose original electronic control board failed. The original controller was replaced with an ATmega328P microcontroller board (Arduino Pro Mini / Nano).
 
 The original hardware restoration and history were detailed in the 2017 Medium article (in Portuguese):
-🔗 **[Control a washing machine with Arduino (Medium, 2017 - Original in Portuguese)](https://medium.com/@aluiziotomazelli/controlando-uma-lavadora-de-roupas-com-arduino-b4aeb57a2abd)**
+🔗 **[Controlando uma Lavadora de Roupas com Arduino (Medium, 2017)](https://medium.com/@aluiziotomazelli/controlando-uma-lavadora-de-roupas-com-arduino-b4aeb57a2abd)**
 
 The initial baseline firmware (**v0.1.0**) successfully ran the wash cycles, but exhibited common limitations of quick Arduino prototypes:
 - Monolithic code inside a single `.ino` file.
@@ -19,6 +19,8 @@ The initial baseline firmware (**v0.1.0**) successfully ran the wash cycles, but
 - Absence of automated tests (every firmware change required testing directly on physical hardware).
 
 This repository documents the step-by-step **architectural refactoring** of this firmware into a production-grade embedded C++ codebase.
+
+📚 **Read the full engineering story and architectural breakdown in [`docs/case-study.md`](docs/case-study.md).**
 
 ---
 
@@ -56,7 +58,7 @@ make build
 # Flash firmware to the board via USB serial (e.g. FTDI):
 make flash PORT=/dev/ttyUSB1
 
-# Run the native Host Unit Tests on your PC (using g++):
+# Run the native Host Unit Tests on your PC (using GoogleTest / GoogleMock):
 make test
 
 # Generate compilation database for IDE IntelliSense:
