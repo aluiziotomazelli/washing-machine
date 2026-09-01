@@ -3,7 +3,15 @@
 # ==============================================================================
 
 FQBN ?= arduino:avr:pro:cpu=16MHzatmega328
-PORT ?= /dev/ttyUSB1
+
+# Auto-detect serial port (persistent FTDI ID or first available USB port)
+DETECTED_PORT := $(shell if [ -e /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A9M9DV3R-if00-port0 ]; then \
+                           readlink -f /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A9M9DV3R-if00-port0; \
+                         else \
+                           ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | head -n 1; \
+                         fi)
+
+PORT ?= $(if $(DETECTED_PORT),$(DETECTED_PORT),/dev/ttyUSB0)
 BUILD_DIR = build
 SKETCH = washing-machine.ino
 
@@ -37,7 +45,13 @@ build:
 	@echo "==> Build finished successfully."
 
 flash:
-	@echo "==> Uploading firmware to $(PORT)..."
+	@if [ ! -e "$(PORT)" ]; then \
+		echo "ERROR: Serial port $(PORT) does not exist!"; \
+		echo "Available serial devices:"; \
+		(ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null) || echo "No serial devices detected."; \
+		exit 1; \
+	fi
+	@echo "==> Uploading firmware to $(PORT) ($(FQBN))..."
 	arduino-cli upload -p $(PORT) --fqbn $(FQBN) --input-dir $(BUILD_DIR) -v .
 
 compile-db:

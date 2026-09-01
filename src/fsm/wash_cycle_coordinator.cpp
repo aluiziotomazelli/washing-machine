@@ -8,8 +8,7 @@ WashCycleCoordinator::WashCycleCoordinator(
     controllers::Agitator& agitator,
     controllers::DrainController& drain_ctrl,
     controllers::SpinController& spin_ctrl,
-    const CoordinatorConfig& config
-)
+    const CoordinatorConfig& config)
     : timer_hal_(timer_hal)
     , fill_ctrl_(fill_ctrl)
     , agitator_(agitator)
@@ -159,7 +158,8 @@ void WashCycleCoordinator::update()
         fill_ctrl_.update();
         if (fill_ctrl_.has_error()) {
             trigger_error();
-        } else if (fill_ctrl_.is_finished()) {
+        }
+        else if (fill_ctrl_.is_finished()) {
             // Water filled! Settle water before motor starts
             is_settling_ = true;
             current_step_ = CycleStep::SETTLE_PAUSE;
@@ -181,7 +181,8 @@ void WashCycleCoordinator::update()
         drain_ctrl_.update();
         if (drain_ctrl_.has_error()) {
             trigger_error();
-        } else if (drain_ctrl_.is_finished()) {
+        }
+        else if (drain_ctrl_.is_finished()) {
             step_index_++;
             plan_next_step();
         }
@@ -216,7 +217,8 @@ void WashCycleCoordinator::execute_step(CycleStep step)
     case CycleStep::AGITATE_GENTLE:
         if (program_ == WashProgram::HEAVY_WASH && !in_rinse_subcycle_) {
             agitator_.start(config_.heavy_wash_agitate1_sec, 300, 300);
-        } else {
+        }
+        else {
             agitator_.start(config_.double_rinse_2_agitate_sec, 300, 300);
         }
         break;
@@ -224,13 +226,17 @@ void WashCycleCoordinator::execute_step(CycleStep step)
     case CycleStep::AGITATE_NORMAL:
         if (program_ == WashProgram::NORMAL_WASH && !in_rinse_subcycle_) {
             agitator_.start(config_.normal_wash_agitate_sec, 300, 200);
-        } else if (program_ == WashProgram::HEAVY_WASH && !in_rinse_subcycle_) {
+        }
+        else if (program_ == WashProgram::HEAVY_WASH && !in_rinse_subcycle_) {
             agitator_.start(config_.heavy_wash_agitate2_sec, 300, 200);
-        } else if (!softener_enabled_) {
+        }
+        else if (!softener_enabled_) {
             agitator_.start(config_.single_rinse_agitate_sec, 300, 200);
-        } else if (step_index_ == 1) {
+        }
+        else if (step_index_ == 1) {
             agitator_.start(config_.double_rinse_1_agitate_sec, 300, 200);
-        } else {
+        }
+        else {
             agitator_.start(config_.double_rinse_2_agitate_post_sec, 300, 200);
         }
         break;
@@ -240,7 +246,8 @@ void WashCycleCoordinator::execute_step(CycleStep step)
         soak_elapsed_before_pause_ms_ = 0;
         if (program_ == WashProgram::HEAVY_WASH && !in_rinse_subcycle_) {
             soak_duration_ms_ = config_.heavy_wash_soak_sec * 1000;
-        } else {
+        }
+        else {
             soak_duration_ms_ = config_.double_rinse_2_soak_sec * 1000;
         }
         break;
@@ -268,8 +275,12 @@ void WashCycleCoordinator::plan_next_step()
     case WashProgram::SPIN_ONLY:
         current_stage_ = WashStage::SPIN;
         switch (step_index_) {
-        case 0: execute_step(CycleStep::DRAIN); break;
-        case 1: execute_step(CycleStep::SPIN_FINAL); break;
+        case 0:
+            execute_step(CycleStep::DRAIN);
+            break;
+        case 1:
+            execute_step(CycleStep::SPIN_FINAL);
+            break;
         default:
             stop_active_process();
             state_ = MachineState::FINISHED;
@@ -283,10 +294,22 @@ void WashCycleCoordinator::plan_next_step()
         if (!softener_enabled_) {
             // Single Rinse Recipe
             switch (step_index_) {
-            case 0: current_stage_ = WashStage::RINSE; execute_step(CycleStep::FILL_MAIN); break;
-            case 1: current_stage_ = WashStage::RINSE; execute_step(CycleStep::AGITATE_NORMAL); break;
-            case 2: current_stage_ = WashStage::RINSE; execute_step(CycleStep::DRAIN); break;
-            case 3: current_stage_ = WashStage::SPIN;  execute_step(CycleStep::SPIN_FINAL); break;
+            case 0:
+                current_stage_ = WashStage::RINSE;
+                execute_step(CycleStep::FILL_MAIN);
+                break;
+            case 1:
+                current_stage_ = WashStage::RINSE;
+                execute_step(CycleStep::AGITATE_NORMAL);
+                break;
+            case 2:
+                current_stage_ = WashStage::RINSE;
+                execute_step(CycleStep::DRAIN);
+                break;
+            case 3:
+                current_stage_ = WashStage::SPIN;
+                execute_step(CycleStep::SPIN_FINAL);
+                break;
             default:
                 stop_active_process();
                 state_ = MachineState::FINISHED;
@@ -294,19 +317,50 @@ void WashCycleCoordinator::plan_next_step()
                 current_step_ = CycleStep::FINISHED;
                 break;
             }
-        } else {
+        }
+        else {
             // Double Rinse Recipe with Softener
             switch (step_index_) {
-            case 0: current_stage_ = WashStage::RINSE; execute_step(CycleStep::FILL_MAIN); break;
-            case 1: current_stage_ = WashStage::RINSE; execute_step(CycleStep::AGITATE_NORMAL); break;
-            case 2: current_stage_ = WashStage::RINSE; execute_step(CycleStep::DRAIN); break;
-            case 3: current_stage_ = WashStage::SPIN;  execute_step(CycleStep::SPIN_INTERMEDIATE); break;
-            case 4: current_stage_ = WashStage::RINSE; execute_step(CycleStep::FILL_SOFTENER); break;
-            case 5: current_stage_ = WashStage::RINSE; execute_step(CycleStep::AGITATE_GENTLE); break;
-            case 6: current_stage_ = WashStage::RINSE; execute_step(CycleStep::SOAK); break;
-            case 7: current_stage_ = WashStage::RINSE; execute_step(CycleStep::AGITATE_NORMAL); break;
-            case 8: current_stage_ = WashStage::RINSE; execute_step(CycleStep::DRAIN); break;
-            case 9: current_stage_ = WashStage::SPIN;  execute_step(CycleStep::SPIN_FINAL); break;
+            case 0:
+                current_stage_ = WashStage::RINSE;
+                execute_step(CycleStep::FILL_MAIN);
+                break;
+            case 1:
+                current_stage_ = WashStage::RINSE;
+                execute_step(CycleStep::AGITATE_NORMAL);
+                break;
+            case 2:
+                current_stage_ = WashStage::RINSE;
+                execute_step(CycleStep::DRAIN);
+                break;
+            case 3:
+                current_stage_ = WashStage::SPIN;
+                execute_step(CycleStep::SPIN_INTERMEDIATE);
+                break;
+            case 4:
+                current_stage_ = WashStage::RINSE;
+                execute_step(CycleStep::FILL_SOFTENER);
+                break;
+            case 5:
+                current_stage_ = WashStage::RINSE;
+                execute_step(CycleStep::AGITATE_GENTLE);
+                break;
+            case 6:
+                current_stage_ = WashStage::RINSE;
+                execute_step(CycleStep::SOAK);
+                break;
+            case 7:
+                current_stage_ = WashStage::RINSE;
+                execute_step(CycleStep::AGITATE_NORMAL);
+                break;
+            case 8:
+                current_stage_ = WashStage::RINSE;
+                execute_step(CycleStep::DRAIN);
+                break;
+            case 9:
+                current_stage_ = WashStage::SPIN;
+                execute_step(CycleStep::SPIN_FINAL);
+                break;
             default:
                 stop_active_process();
                 state_ = MachineState::FINISHED;
@@ -321,9 +375,15 @@ void WashCycleCoordinator::plan_next_step()
         if (!in_rinse_subcycle_) {
             current_stage_ = WashStage::WASH;
             switch (step_index_) {
-            case 0: execute_step(CycleStep::FILL_MAIN); break;
-            case 1: execute_step(CycleStep::AGITATE_NORMAL); break;
-            case 2: execute_step(CycleStep::DRAIN); break;
+            case 0:
+                execute_step(CycleStep::FILL_MAIN);
+                break;
+            case 1:
+                execute_step(CycleStep::AGITATE_NORMAL);
+                break;
+            case 2:
+                execute_step(CycleStep::DRAIN);
+                break;
             default:
                 // Wash stage finished! Switch to Rinse & Spin
                 in_rinse_subcycle_ = true;
@@ -339,11 +399,21 @@ void WashCycleCoordinator::plan_next_step()
         if (!in_rinse_subcycle_) {
             current_stage_ = WashStage::WASH;
             switch (step_index_) {
-            case 0: execute_step(CycleStep::FILL_MAIN); break;
-            case 1: execute_step(CycleStep::AGITATE_GENTLE); break;
-            case 2: execute_step(CycleStep::SOAK); break;
-            case 3: execute_step(CycleStep::AGITATE_NORMAL); break;
-            case 4: execute_step(CycleStep::DRAIN); break;
+            case 0:
+                execute_step(CycleStep::FILL_MAIN);
+                break;
+            case 1:
+                execute_step(CycleStep::AGITATE_GENTLE);
+                break;
+            case 2:
+                execute_step(CycleStep::SOAK);
+                break;
+            case 3:
+                execute_step(CycleStep::AGITATE_NORMAL);
+                break;
+            case 4:
+                execute_step(CycleStep::DRAIN);
+                break;
             default:
                 // Heavy wash stage finished! Switch to Rinse & Spin
                 in_rinse_subcycle_ = true;
