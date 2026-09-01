@@ -283,20 +283,97 @@ With atomic process controllers, each physical action is tested independently wi
 - `AgitatorTest` (4 tests): CW/CCW alternation, off-pause timing, duration completion, pause/resume.
 - `DrainControllerTest` (5 tests): empty detection, 30s bleed phase, timeout detection, pause/resume.
 - `SpinControllerTest` (7 tests): clutch engage, level-dependent sprints, 4s/4s duty run, coast-down, soft pause, soft stop, emergency stop.
+- `WashCycleCoordinatorTest` (8 tests): recipe sequencing, step advancement, error triggers, process delegation.
+- `PanelControllerTest` (12 tests): button event handling, UI state transitions, audio feedback, differentiated error diagnostics.
 
-**Total Host Tests:** **58 tests passing in ~18 ms**.
-
----
-
-## Chapter 6: Event-Driven Wash Cycle Coordinator FSM *(Upcoming)*
-*(Coming next: Orchestrating the 4 wash programs [Normal, Heavy, Rinse, Spin] by sequencing the atomic process controllers).*
+**Total Host Tests:** **80 automated unit tests passing in ~42 ms**.
 
 ---
 
-## Chapter 7: Safety Watchdogs, Fail-Safe Timeouts & I2C Vibration *(Upcoming)*
-*(Coming soon: Real-time I2C accelerometer out-of-balance detection and hardware watchdogs).*
+## Chapter 6: Event-Driven Wash Cycle Coordinator & UI Panel Orchestration
+
+With the atomic process controllers established, the final milestone of `v0.3.0` was building the high-level **Orchestrator (FSM Coordinator)** and the **Panel Controller**, tying the entire system together via Dependency Injection.
+
+```mermaid
+graph TD
+    subgraph UI_Layer ["Presentation & UI Layer (src/ui/)"]
+        BTN["4x Non-Blocking Buttons<br>(Start, Program, Level, Softener)"]
+        PANEL["PanelController<br>(Event Translation & UI Feedback)"]
+        DISCRETE["DiscreteLedPanel<br>(LED Animations & Errors)"]
+        BUZZER["Buzzer<br>(Acoustic Patterns)"]
+    end
+
+    subgraph Coordination_Layer ["FSM Orchestration (src/fsm/)"]
+        COORD["WashCycleCoordinator<br>(Recipe Sequencer: Normal, Heavy, Rinse, Spin)"]
+    end
+
+    subgraph Process_Layer ["Process Controllers (src/controllers/)"]
+        FILL["FillController"]
+        AGIT["Agitator"]
+        DRAIN["DrainController"]
+        SPIN["SpinController"]
+    end
+
+    BTN -->|Click Events| PANEL
+    PANEL -->|Start, Pause, Resume, Advance, Stop| COORD
+    COORD -->|State & Stage Sync| PANEL
+    PANEL -->|Visual Feedback| DISCRETE
+    PANEL -->|Acoustic Feedback| BUZZER
+    COORD -->|Delegates Step| FILL
+    COORD -->|Delegates Step| AGIT
+    COORD -->|Delegates Step| DRAIN
+    COORD -->|Delegates Step| SPIN
+```
+
+### 1. The `WashCycleCoordinator` Recipe Sequencer
+The [`WashCycleCoordinator`](../src/fsm/wash_cycle_coordinator.hpp) implements the complete laundry recipes without blocking:
+- **Normal Wash:** Fill $\rightarrow$ Continuous Agitation (18m) $\rightarrow$ Drain $\rightarrow$ Rinse $\rightarrow$ Spin.
+- **Heavy Wash:** Fill $\rightarrow$ Gentle Agitation (8m) $\rightarrow$ Long Soak (20m) $\rightarrow$ Normal Agitation (14m) $\rightarrow$ Drain $\rightarrow$ Rinse $\rightarrow$ Spin.
+- **Rinse Only:** Single Rinse (no softener) or Double Rinse with Softener (Fill $\rightarrow$ Agitate $\rightarrow$ Drain $\rightarrow$ Interm Spin $\rightarrow$ Softener Fill $\rightarrow$ Agitate $\rightarrow$ Softener Soak $\rightarrow$ Post Agitate $\rightarrow$ Drain $\rightarrow$ Final Spin).
+- **Spin Only:** Drain $\rightarrow$ 30s Bleed $\rightarrow$ Clutch Sprints $\rightarrow$ Continuous 4s/4s Spin $\rightarrow$ Coast-Down.
+
+### 2. The `PanelController` Presentation Layer
+The [`PanelController`](../src/ui/panel_controller.hpp) bridges user input with the domain:
+- **Zero Polling in Domain:** Translates single clicks, long clicks (step advance), and very long clicks (cycle cancel) into coordinator commands.
+- **Differentiated Error Diagnostics (Legacy Restored):**
+  - `FILL_TIMEOUT` (12-min inlet fail-safe): Blinks all water level LEDs.
+  - `DRAIN_TIMEOUT` (5-min pump fail-safe): Blinks all program stage LEDs.
+- **Non-Blocking Visual & Acoustic Feedback:** Synchronizes solid vs blinking power LEDs, stage progress, and tone patterns smoothly.
+
+### 3. Main System Assembly via Inversion of Control (`washing-machine.ino`)
+The top-level Arduino sketch contains zero business logic, acting strictly as the **Composition Root**:
+```cpp
+void setup() {
+    // 1. Initialize hardware I/O pins
+    // 2. Initialize UI presentation
+    panel_ctrl.init();
+}
+
+void loop() {
+    // Non-blocking tick pump
+    btn_start.update();
+    btn_program.update();
+    btn_water_level.update();
+    btn_softener.update();
+
+    coordinator.update();
+    panel_ctrl.update();
+    led_panel.update();
+    buzzer.update();
+}
+```
+
+### 4. Memory Footprint on ATmega328P (5V, 16MHz)
+- **Flash ROM:** 14,976 bytes (**48%** of 30,720 bytes).
+- **SRAM:** 721 bytes (**35%** of 2,048 bytes).
+- **Dynamic Allocation (`heap`):** 0 bytes (100% static allocation).
+
+---
+
+## Chapter 7: Safety Watchdogs, Out-of-Balance Sensing & I2C Vibration *(Upcoming)*
+*(Coming in v0.4.0: Real-time I2C accelerometer vibration detection, unbalanced tub emergency pause, and AVR hardware watchdogs).*
 
 ---
 
 ## Chapter 8: WS2812B Addressable LED Engine & Hardware Migration (ESP32-C3) *(Upcoming)*
-*(Coming soon: NeoPixel animation engine and porting to 32-bit ESP32-C3 architecture).*
+*(Coming in v0.5.0: NeoPixel animation engine and porting to 32-bit ESP32-C3 architecture).*
