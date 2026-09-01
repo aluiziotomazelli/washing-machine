@@ -5,7 +5,6 @@
 FQBN ?= arduino:avr:pro:cpu=16MHzatmega328
 PORT ?= /dev/ttyUSB1
 BUILD_DIR = build
-LIBS_DIR = libraries
 SKETCH = washing-machine.ino
 
 # Host Compiler & GoogleTest / GoogleMock settings
@@ -31,7 +30,7 @@ all: build
 build:
 	@mkdir -p $(BUILD_DIR)
 	@echo "==> Compiling Arduino firmware ($(FQBN)) with verbose output..."
-	arduino-cli compile --fqbn $(FQBN) --libraries $(LIBS_DIR) --build-path $(BUILD_DIR) -v --warnings all .
+	arduino-cli compile --fqbn $(FQBN) --build-path $(BUILD_DIR) -v --warnings all .
 	@echo "==> Build finished successfully."
 
 flash:
@@ -40,7 +39,7 @@ flash:
 
 compile-db:
 	@mkdir -p $(BUILD_DIR)
-	arduino-cli compile --fqbn $(FQBN) --libraries $(LIBS_DIR) --build-path $(BUILD_DIR) --only-compilation-database .
+	arduino-cli compile --fqbn $(FQBN) --build-path $(BUILD_DIR) --only-compilation-database .
 
 # ------------------------------------------------------------------------------
 # Native Host Unit Tests (GoogleTest & GoogleMock)
@@ -59,8 +58,8 @@ test: $(GOOGLETEST_DIR)
 	@echo "==> Compiling Host Unit Tests with GoogleTest & GoogleMock..."
 	$(HOST_CXX) $(HOST_CXXFLAGS) $(GMOCK_SRC) $(TEST_SRC) -o $(TEST_BIN)
 	@echo "==> Running Host Unit Tests..."
-	@./$(TEST_BIN)
+	@$(TEST_BIN)
 
 clean:
-	@echo "==> Cleaning build directory..."
-	@rm -rf $(BUILD_DIR) compile_commands.json
+	@echo "==> Cleaning build artifacts..."
+	rm -rf $(BUILD_DIR)
