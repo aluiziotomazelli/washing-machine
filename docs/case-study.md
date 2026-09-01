@@ -8,10 +8,11 @@
 1. [Introduction & Background](#introduction--background)
 2. [Chapter 1: Deconstructing the Legacy Codebase (v0.1.0)](#chapter-1-deconstructing-the-legacy-codebase-v010)
 3. [Chapter 2: Hardware Abstraction & Dependency Injection](#chapter-2-hardware-abstraction--dependency-injection)
-4. [Chapter 3: Host Unit Testing with GoogleTest, Google Mock & Automated CI](#chapter-3-host-unit-testing-with-googletest-google-mock--automated-ci)
-5. [Chapter 4: Actuator Safety, Motor Dead-Time & Interlocks *(In Progress)*](#chapter-4-actuator-safety-motor-dead-time--interlocks)
+4. [Chapter 3: Dual-Target Development with GoogleTest, Google Mock & Automated CI](#chapter-3-dual-target-development-with-googletest-google-mock--automated-ci)
+5. [Chapter 4: Actuator Safety, Motor Dead-Time & Peripheral Drivers](#chapter-4-actuator-safety-motor-dead-time--peripheral-drivers)
 6. [Chapter 5: Event-Driven Non-Blocking State Machine (FSM) *(Upcoming)*](#chapter-5-event-driven-non-blocking-state-machine-fsm)
-7. [Chapter 6: Hardware Portability & Next-Gen Peripherals (ESP32-C3 & I2C) *(Upcoming)*](#chapter-6-hardware-portability--next-gen-peripherals-esp32-c3--i2c)
+7. [Chapter 6: Safety Watchdogs, Fail-Safe Timeouts & I2C Vibration *(Upcoming)*](#chapter-6-safety-watchdogs-fail-safe-timeouts--i2c-vibration)
+8. [Chapter 7: WS2812B Addressable LED Engine & Hardware Migration (ESP32-C3) *(Upcoming)*](#chapter-7-ws2812b-addressable-led-engine--hardware-migration-esp32-c3)
 
 ---
 
@@ -68,6 +69,8 @@ classDiagram
         +set_mode(pin, mode)*
         +set_level(pin, level)*
         +get_level(pin)*
+        +play_tone(pin, freq)*
+        +stop_tone(pin)*
     }
     class ITimerHAL {
         <<interface>>
@@ -79,6 +82,8 @@ classDiagram
         +set_mode(pin, mode)
         +set_level(pin, level)
         +get_level(pin)
+        +play_tone(pin, freq)
+        +stop_tone(pin)
     }
     class ArduinoTimerHAL {
         +get_time_ms()
@@ -101,7 +106,7 @@ classDiagram
 ### Key Design Decisions:
 
 1. **Pure Abstract Interfaces:**
-   - [`src/hal/interfaces/i_gpio_hal.hpp`](../src/hal/interfaces/i_gpio_hal.hpp): Encapsulates pin direction and digital I/O.
+   - [`src/hal/interfaces/i_gpio_hal.hpp`](../src/hal/interfaces/i_gpio_hal.hpp): Encapsulates pin direction, digital I/O, and hardware tone generation.
    - [`src/hal/interfaces/i_timer_hal.hpp`](../src/hal/interfaces/i_timer_hal.hpp): Encapsulates system timestamp services (`millis`, `micros`).
 
 2. **Constructor Dependency Injection via References (`&`):**
@@ -120,9 +125,18 @@ classDiagram
 
 ---
 
-## Chapter 3: Host Unit Testing with GoogleTest, Google Mock & Automated CI
+## Chapter 3: Dual-Target Development with GoogleTest, Google Mock & Automated CI
 
-Embedded software does not have to be tested exclusively on target hardware. Adopting **Dual-Target Development** allows 95% of business logic and state machines to be verified on the developer's workstation in milliseconds.
+Rather than postponing testing to a late milestone, we adopted **Dual-Target Development** directly in `v0.2.0`. Every driver and state machine is verified on the host machine in milliseconds.
+
+```mermaid
+graph LR
+    A[C++ Driver Code] --> B{Target Compilation}
+    B -->|g++ / Linux| C[GoogleTest & GoogleMock Test Runner]
+    B -->|avr-gcc / Arduino| D[ATmega328P Flash Binary]
+    C -->|~18 ms| E[34 Automated Unit Tests Passed]
+    D -->|~10 s| F[Hardware Deployment]
+```
 
 ### 1. The Finite State Machine `Button` Driver
 We created a robust, non-blocking [`ui::Button`](../src/ui/button.hpp) driven by a 6-state FSM:
@@ -133,37 +147,16 @@ We created a robust, non-blocking [`ui::Button`](../src/ui/button.hpp) driven by
 - **`WAIT_FOR_DOUBLE`**: 300 ms window to detect double clicks.
 - **`TIMEOUT_WAIT_FOR_RELEASE`**: Protects against physically stuck buttons (> 6000 ms).
 
-### 2. Google Mock Verification (`test/test_button.cpp`)
-Using Google Mock (`MOCK_METHOD`, `EXPECT_CALL`, `ON_CALL`), we simulate exact electrical waveforms and time steps:
-
-```cpp
-TEST_F(ButtonTest, DetectsSingleClickAfterDebounceAndRelease) {
-    // 1. Press and hold for 100 ms (past 20ms debounce)
-    press_button();
-    run_for(100);
-
-    EXPECT_TRUE(btn.is_pressed());
-    EXPECT_EQ(btn.get_last_click(), ui::ButtonClickType::NONE_CLICK);
-
-    // 2. Release and wait past double-click window (> 300ms)
-    release_button();
-    run_for(350);
-
-    EXPECT_FALSE(btn.is_pressed());
-    EXPECT_EQ(btn.get_last_click(), ui::ButtonClickType::CLICK);
-}
-```
-
-### 3. Continuous Integration (GitHub Actions)
+### 2. Automated Continuous Integration (GitHub Actions)
 We configured [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) with automatic caching (`actions/cache@v4`):
-- **On every push:** GoogleTest and Google Mock compile and run all unit tests in **~1 ms**.
-- **Firmware build:** `arduino-cli` compiles the full ATmega328P target binary in **~10 s**.
+- **Host Tests:** Native GoogleTest and Google Mock compile and run all unit tests in **~18 ms**.
+- **AVR Build:** `arduino-cli` compiles the full ATmega328P target binary in **~10 s**.
 
 ---
 
-## Chapter 4: Actuator Safety, Motor Dead-Time & Interlocks
+## Chapter 4: Actuator Safety, Motor Dead-Time & Peripheral Drivers
 
-Controlling high-power AC inductive loads (such as an AC wash motor, drain pump, brake clutch, and solenoid water valves) requires strict hardware and software safety guarantees.
+Controlling high-power AC inductive loads (wash motor, drain pump, brake clutch, solenoid valves) and user interface peripherals requires strict safety interlocks.
 
 ```mermaid
 stateDiagram-v2
@@ -184,7 +177,7 @@ stateDiagram-v2
 ```
 
 ### 1. General Binary Loads: `DigitalOutput` & Intrusive Linked List
-Single-pin binary actuators (inlet valves, drain pump, clutch actuator, buzzer) are controlled via [`hal::DigitalOutput`](../src/hal/digital_output.hpp):
+Single-pin binary actuators (inlet valves, drain pump, clutch actuator) are controlled via [`hal::DigitalOutput`](../src/hal/digital_output.hpp):
 - **Intrusive Linked List Pattern:** Objects register themselves into a static linked list during construction without using dynamic memory (`new` / `malloc` / `std::vector`), allowing global batch operations (`DigitalOutput::init_all()`, `DigitalOutput::turn_off_all()`).
 - **Active-Low vs Active-High Support:** Seamlessly drives direct-logic outputs and inverted relay modules.
 - **Safety Decision (Exclusion of `turn_on_all`):** Turning on all physical loads simultaneously in an appliance (filling valves, heater, pump, and spin motor at once) could cause power surges or domestic breaker trips. Thus, only batch *turn-off* (`turn_off_all()`) is supported for fail-safe emergency shutdowns.
@@ -197,13 +190,35 @@ A reversible AC induction motor possesses two independent windings (Clockwise / 
 2. **Non-Blocking Dead-Time:** When reversing from Clockwise to Counter-Clockwise (or vice-versa), both pins are immediately de-energized, and the driver enters `DEAD_TIME_WAIT`. The new direction is energized only after the configured dead-time window (e.g. 200 ms) has elapsed.
 3. **Emergency Stop Override:** Calling `stop()` during a dead-time window immediately aborts the pending rotation, ensuring the motor stays safely stopped.
 
+### 3. Water Level Sensing: `PressureSwitchSensor`
+The physical electromechanical pressure switch features mixed contact topologies:
+- **Low Level (31-32):** Normally Closed (NC) $\rightarrow$ opens under pressure (`LEVEL_HIGH` when level reached).
+- **Medium Level (11-13):** Normally Open (NO) $\rightarrow$ closes under pressure (`LEVEL_LOW` when level reached).
+- **High Level (21-23):** Normally Open (NO) $\rightarrow$ closes under pressure (`LEVEL_LOW` when level reached).
+
+[`hal::PressureSwitchSensor`](../src/hal/pressure_switch_sensor.hpp) normalizes these raw polarities and implements a **100 ms hydraulic stabilization filter** (*sloshing debouncer*) to prevent false triggering from water waves.
+
+### 4. Non-Blocking Audio: `Buzzer` (Passive Transducer Engine)
+The appliance uses a passive piezoelectric transducer without an internal oscillator. [`ui::Buzzer`](../src/ui/buzzer.hpp) utilizes non-blocking 3000 Hz hardware tone generation (`play_tone` / `stop_tone`) to produce acoustic cues:
+- `SHORT_BEEP` (50 ms button click feedback)
+- `DOUBLE_BEEP` (function toggle)
+- `CYCLE_FINISHED` (4-beep completion tune)
+- `ERROR_ALARM` (continuous alternating alarm)
+
+### 5. Decoupled Visual Feedback: `ILedPanel` & `DiscreteLedPanel`
+To allow transitioning to addressable RGB LEDs (WS2812B) in the future without modifying domain logic, [`ui::ILedPanel`](../src/ui/interfaces/i_led_panel.hpp) provides a semantic visual interface (`set_stage(WashStage)`, `set_selected_level(WaterLevel)`, `set_softener(bool)`). The current implementation [`ui::DiscreteLedPanel`](../src/ui/discrete_led_panel.hpp) drives the 7 physical panel LEDs.
+
 ---
 
 ## Chapter 5: Event-Driven Non-Blocking State Machine (FSM)
-*(Coming soon: Replacing blocking delay loops with a tick-driven finite state machine).*
+*(Coming next: Implementing the central washing machine cycle coordinator FSM).*
 
 ---
 
-## Chapter 6: Hardware Portability & Next-Gen Peripherals (ESP32-C3 & I2C)
-*(Coming soon: Integrating I2C vibration watchdog and addressable RGB LEDs).*
+## Chapter 6: Safety Watchdogs, Fail-Safe Timeouts & I2C Vibration
+*(Coming soon: 12-minute water fill safety timeout and real-time I2C accelerometer out-of-balance detection).*
 
+---
+
+## Chapter 7: WS2812B Addressable LED Engine & Hardware Migration (ESP32-C3)
+*(Coming soon: NeoPixel animation engine and porting to 32-bit ESP32-C3 architecture).*

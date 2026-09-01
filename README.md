@@ -31,11 +31,11 @@ The project's architectural evolution is structured into milestones with dedicat
 | Version | Milestone | Description |
 | :---: | :--- | :--- |
 | **`v0.1.0`** | 🍝 **Legacy Spaghetti (Baseline)** | Original monolithic `.ino` firmware, blocking delays, and global state. |
-| **`v0.2.0`** | 🔌 **Hardware Abstraction Layer (HAL)** | Hardware isolation via pure C++ interfaces (`IActuators`, `ISensors`) and safety locks (motor *dead-time* preventing reversal short circuits). |
-| **`v0.3.0`** | ⚙️ **Non-Blocking FSM** | Event-driven Finite State Machine powered by `millis()`, eliminating all `delay()` and blocking loops. |
-| **`v0.4.0`** | 🧪 **Host Unit Testing (Linux/PC)** | Automated unit test suite using *Mocks* compiled natively with `g++`, validating cycles and timeout fail-safes in milliseconds. |
-| **`v0.5.0`** | 🚨 **I2C Watchdog & WS2812B** | Real-time out-of-balance detection via I2C accelerometer and migration of 7 indicator LEDs to a single addressable RGB LED line. |
-| **`v1.0.0`** | 🚀 **Production Modern C++** | Robust, fully documented, clean C++ firmware ready for deployment. |
+| **`v0.2.0`** | 🔌 **HAL & Host Unit Testing (Linux/PC)** | Pure C++ interfaces (`IGpioHAL`, `ITimerHAL`, `IButton`, `IDigitalOutput`, `IReversibleMotor`, `IWaterLevelSensor`, `IBuzzer`, `ILedPanel`), safety interlocks (motor dead-time), and automated Dual-Target Unit Testing (GoogleTest & GoogleMock on PC with CI). |
+| **`v0.3.0`** | ⚙️ **Non-Blocking Finite State Machine** | Event-driven washing machine cycle coordinator powered by non-blocking ticks, eliminating all `delay()` and blocking loops. |
+| **`v0.4.0`** | 🚨 **Sensors & Safety Watchdogs** | Water fill timeout protection (12-minute fail-safe), drain verification, and real-time I2C accelerometer vibration detection. |
+| **`v0.5.0`** | 🌈 **Addressable RGB LEDs (WS2812B)** | Dynamic light animations (spinning chase, fluid level gauge, breathing fault alarms) via the `ILedPanel` interface. |
+| **`v1.0.0`** | 🚀 **Production Modern C++** | Robust, fully documented, clean C++ firmware ready for deployment (including ESP32-C3 portability). |
 
 ---
 
