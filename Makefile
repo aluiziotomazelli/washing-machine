@@ -18,7 +18,7 @@ GMOCK_INC = -I$(GTEST_DIR)/include -I$(GTEST_DIR) -I$(GMOCK_DIR)/include -I$(GMO
 GMOCK_SRC = $(GTEST_DIR)/src/gtest-all.cc $(GMOCK_DIR)/src/gmock-all.cc $(GMOCK_DIR)/src/gmock_main.cc
 
 HOST_CXXFLAGS = -std=c++17 -Wall -Wextra -pthread -Isrc -Itest $(GMOCK_INC) -DHOST_TEST
-TEST_SRC = $(wildcard test/*.cpp) $(wildcard src/ui/*.cpp) $(wildcard src/core/*.cpp)
+TEST_SRC = $(wildcard test/*.cpp) $(shell find src -name "*.cpp" ! -path "*/arduino/*")
 TEST_BIN = $(BUILD_DIR)/test_runner
 
 .PHONY: all build flash test clean compile-db setup-gtest
