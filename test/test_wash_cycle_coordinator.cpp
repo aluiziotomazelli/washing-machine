@@ -167,5 +167,20 @@ TEST_F(WashCycleCoordinatorTest, ErrorInControllerTransitionsCoordinatorToErrorS
     coordinator.update();
 
     EXPECT_EQ(coordinator.get_state(), domain::MachineState::ERROR);
+    EXPECT_EQ(coordinator.get_error(), domain::MachineError::FILL_TIMEOUT);
     EXPECT_FALSE(fill_ctrl.is_active());
+}
+
+TEST_F(WashCycleCoordinatorTest, DrainTimeoutTransitionsToDrainTimeoutError)
+{
+    coordinator.start_cycle(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false);
+    EXPECT_TRUE(drain_ctrl.is_active());
+
+    // Force drain controller timeout (drain timeout is 5000ms in test mock)
+    simulated_time_ms = 6000;
+    coordinator.update();
+
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::ERROR);
+    EXPECT_EQ(coordinator.get_error(), domain::MachineError::DRAIN_TIMEOUT);
+    EXPECT_FALSE(drain_ctrl.is_active());
 }

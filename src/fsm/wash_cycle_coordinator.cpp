@@ -31,6 +31,7 @@ void WashCycleCoordinator::start_cycle(WashProgram program, WaterLevel level, bo
     level_ = level;
     softener_enabled_ = softener_enabled;
     state_ = MachineState::RUNNING;
+    current_error_ = MachineError::NONE;
     step_index_ = 0;
     in_rinse_subcycle_ = false;
 
@@ -103,6 +104,7 @@ void WashCycleCoordinator::stop_cycle()
 {
     stop_active_process();
     state_ = MachineState::IDLE;
+    current_error_ = MachineError::NONE;
     current_stage_ = WashStage::IDLE;
     current_step_ = CycleStep::NONE;
     step_index_ = 0;
@@ -121,9 +123,10 @@ void WashCycleCoordinator::stop_active_process()
     soak_elapsed_before_pause_ms_ = 0;
 }
 
-void WashCycleCoordinator::trigger_error()
+void WashCycleCoordinator::trigger_error(MachineError error)
 {
     stop_active_process();
+    current_error_ = error;
     state_ = MachineState::ERROR;
 }
 
@@ -157,7 +160,7 @@ void WashCycleCoordinator::update()
     if (fill_ctrl_.is_active()) {
         fill_ctrl_.update();
         if (fill_ctrl_.has_error()) {
-            trigger_error();
+            trigger_error(MachineError::FILL_TIMEOUT);
         }
         else if (fill_ctrl_.is_finished()) {
             // Water filled! Settle water before motor starts
@@ -180,7 +183,7 @@ void WashCycleCoordinator::update()
     if (drain_ctrl_.is_active()) {
         drain_ctrl_.update();
         if (drain_ctrl_.has_error()) {
-            trigger_error();
+            trigger_error(MachineError::DRAIN_TIMEOUT);
         }
         else if (drain_ctrl_.is_finished()) {
             step_index_++;

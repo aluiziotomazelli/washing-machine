@@ -48,7 +48,7 @@ public:
     void init() override;
     void update() override;
 
-    void set_machine_state(domain::MachineState state) override;
+    void set_machine_state(domain::MachineState state, domain::MachineError error = domain::MachineError::NONE) override;
     void set_softener(bool enabled) override;
     void set_program(WashProgram program) override;
     void set_stage(WashStage stage) override;
@@ -65,6 +65,7 @@ private:
     bool is_initialized_{false};
 
     WashProgram current_program_{WashProgram::NORMAL_WASH};
+    domain::MachineError current_error_{domain::MachineError::NONE};
     bool is_blinking_wash_{false};
     bool is_blinking_error_{false};
     bool is_blinking_power_{false};

@@ -152,6 +152,45 @@ TEST_F(DiscreteLedPanelTest, ControlsWaterLevelIndicators)
     panel.set_selected_level(domain::WaterLevel::MEDIUM_LEVEL);
 }
 
+TEST_F(DiscreteLedPanelTest, FillTimeoutBlinksWaterLevelLeds)
+{
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1000));
+    EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+
+    panel.set_machine_state(domain::MachineState::ERROR, domain::MachineError::FILL_TIMEOUT);
+
+    // After 500ms -> toggles level LEDs to LOW
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1500));
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    panel.update();
+}
+
+TEST_F(DiscreteLedPanelTest, DrainTimeoutBlinksProgramStageLeds)
+{
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1000));
+    EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+
+    panel.set_machine_state(domain::MachineState::ERROR, domain::MachineError::DRAIN_TIMEOUT);
+
+    // After 500ms -> toggles stage LEDs to LOW
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1500));
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    panel.update();
+}
+
 TEST_F(DiscreteLedPanelTest, TurnsOffAllLedsOnPanel)
 {
     EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_LOW)).Times(1);

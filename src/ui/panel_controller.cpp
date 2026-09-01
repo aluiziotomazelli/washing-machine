@@ -170,7 +170,7 @@ void PanelController::sync_state_with_coordinator()
     domain::WashStage current_stage = coordinator_.get_current_stage();
 
     if (prev_state_ != current_state) {
-        led_panel_.set_machine_state(current_state);
+        led_panel_.set_machine_state(current_state, coordinator_.get_error());
 
         if (current_state == domain::MachineState::FINISHED) {
             buzzer_.play_pattern(BuzzerPattern::CYCLE_FINISHED);

@@ -10,6 +10,7 @@
 
 namespace fsm {
 
+using domain::MachineError;
 using domain::MachineState;
 using domain::WashProgram;
 using domain::WashStage;
@@ -88,6 +89,7 @@ public:
 
     // Inspection Interface
     MachineState get_state() const { return state_; }
+    MachineError get_error() const { return current_error_; }
     WashStage get_current_stage() const { return current_stage_; }
     CycleStep get_current_step() const { return current_step_; }
     WashProgram get_program() const { return program_; }
@@ -99,7 +101,7 @@ private:
     void plan_next_step();
     void execute_step(CycleStep step);
     void stop_active_process();
-    void trigger_error();
+    void trigger_error(MachineError error);
 
     hal::ITimerHAL& timer_hal_;
     controllers::FillController& fill_ctrl_;
@@ -110,6 +112,7 @@ private:
 
     // Macro State
     MachineState state_{MachineState::IDLE};
+    MachineError current_error_{MachineError::NONE};
     WashStage current_stage_{WashStage::IDLE};
     CycleStep current_step_{CycleStep::NONE};
 

@@ -64,8 +64,14 @@ void DiscreteLedPanel::update()
         }
 
         if (is_blinking_error_) {
-            write_pin(pins_.level_low, blink_state_);
-            write_pin(pins_.level_med, blink_state_);
+            if (current_error_ == MachineError::DRAIN_TIMEOUT) {
+                write_pin(pins_.wash, blink_state_);
+                write_pin(pins_.rinse, blink_state_);
+                write_pin(pins_.spin, blink_state_);
+            } else {
+                write_pin(pins_.level_low, blink_state_);
+                write_pin(pins_.level_med, blink_state_);
+            }
         }
 
         if (is_blinking_power_) {
@@ -177,8 +183,10 @@ void DiscreteLedPanel::set_selected_level(WaterLevel level)
     }
 }
 
-void DiscreteLedPanel::set_machine_state(MachineState state)
+void DiscreteLedPanel::set_machine_state(MachineState state, MachineError error)
 {
+    current_error_ = error;
+
     switch (state) {
     case MachineState::IDLE:
     case MachineState::FINISHED:
@@ -207,8 +215,26 @@ void DiscreteLedPanel::set_machine_state(MachineState state)
         blink_state_ = true;
         last_blink_time_ms_ = timer_hal_.get_time_ms();
         write_pin(pins_.power, false);
-        write_pin(pins_.level_low, true);
-        write_pin(pins_.level_med, true);
+
+        if (current_error_ == MachineError::FILL_TIMEOUT) {
+            // Fill error (legacy type 1): blink all water level LEDs, turn off stage LEDs
+            write_pin(pins_.wash, false);
+            write_pin(pins_.rinse, false);
+            write_pin(pins_.spin, false);
+            write_pin(pins_.level_low, true);
+            write_pin(pins_.level_med, true);
+        } else if (current_error_ == MachineError::DRAIN_TIMEOUT) {
+            // Drain error (legacy type 2): blink all program/stage LEDs, turn off level LEDs
+            write_pin(pins_.level_low, false);
+            write_pin(pins_.level_med, false);
+            write_pin(pins_.wash, true);
+            write_pin(pins_.rinse, true);
+            write_pin(pins_.spin, true);
+        } else {
+            // Generic error: blink level LEDs
+            write_pin(pins_.level_low, true);
+            write_pin(pins_.level_med, true);
+        }
         break;
     }
 }
@@ -218,6 +244,7 @@ void DiscreteLedPanel::turn_off_all()
     is_blinking_wash_ = false;
     is_blinking_error_ = false;
     is_blinking_power_ = false;
+    current_error_ = MachineError::NONE;
 
     write_pin(pins_.power, false);
     write_pin(pins_.softener, false);

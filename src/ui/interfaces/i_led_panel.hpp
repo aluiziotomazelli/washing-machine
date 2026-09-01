@@ -5,6 +5,7 @@
 
 namespace ui {
 
+using domain::MachineError;
 using domain::MachineState;
 using domain::WashProgram;
 using domain::WashStage;
@@ -31,7 +32,7 @@ public:
     /**
      * @brief Update the machine macro state for visual feedback (IDLE, RUNNING, PAUSED, ERROR, FINISHED).
      */
-    virtual void set_machine_state(domain::MachineState state) = 0;
+    virtual void set_machine_state(domain::MachineState state, domain::MachineError error = domain::MachineError::NONE) = 0;
 
     /**
      * @brief Control the softener mode indicator.
