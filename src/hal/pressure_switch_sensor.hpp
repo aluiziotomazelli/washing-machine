@@ -30,13 +30,13 @@ struct LevelSensorPin {
  * @brief Configuration parameters for a multi-contact electromechanical pressure switch.
  */
 struct PressureSwitchConfig {
-    LevelSensorPin low{10, ContactType::NORMALLY_CLOSED};  // 31-32: NC (Low level)
-    LevelSensorPin medium{11, ContactType::NORMALLY_OPEN}; // 11-13: NO (Medium level)
-    LevelSensorPin high{12, ContactType::NORMALLY_OPEN};   // 21-23: NO (High level)
+    LevelSensorPin low{10, ContactType::NORMALLY_CLOSED};  // 31-32: NC (Low level, Pin 10)
+    LevelSensorPin medium{11, ContactType::NORMALLY_OPEN}; // 11-13: NO (Medium level, Pin 11)
+    LevelSensorPin high{255, ContactType::NORMALLY_OPEN};  // 21-23: NO (High level, 255 on ATmega328P due to pin 12 being ledNivelM)
     uint16_t debounce_ms{100};                             // Hydraulic stabilization window
 
     PressureSwitchConfig() = default;
-    PressureSwitchConfig(LevelSensorPin l, LevelSensorPin m, LevelSensorPin h, uint16_t db = 100)
+    PressureSwitchConfig(LevelSensorPin l, LevelSensorPin m, LevelSensorPin h = LevelSensorPin{255, ContactType::NORMALLY_OPEN}, uint16_t db = 100)
         : low(l), medium(m), high(h), debounce_ms(db) {}
 };
 
