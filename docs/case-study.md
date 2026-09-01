@@ -10,9 +10,10 @@
 3. [Chapter 2: Hardware Abstraction & Dependency Injection](#chapter-2-hardware-abstraction--dependency-injection)
 4. [Chapter 3: Dual-Target Development with GoogleTest, Google Mock & Automated CI](#chapter-3-dual-target-development-with-googletest-google-mock--automated-ci)
 5. [Chapter 4: Actuator Safety, Motor Dead-Time & Peripheral Drivers](#chapter-4-actuator-safety-motor-dead-time--peripheral-drivers)
-6. [Chapter 5: Event-Driven Non-Blocking State Machine (FSM) *(Upcoming)*](#chapter-5-event-driven-non-blocking-state-machine-fsm)
-7. [Chapter 6: Safety Watchdogs, Fail-Safe Timeouts & I2C Vibration *(Upcoming)*](#chapter-6-safety-watchdogs-fail-safe-timeouts--i2c-vibration)
-8. [Chapter 7: WS2812B Addressable LED Engine & Hardware Migration (ESP32-C3) *(Upcoming)*](#chapter-7-ws2812b-addressable-led-engine--hardware-migration-esp32-c3)
+6. [Chapter 5: Domain Modeling & Atomic Process Controllers (SRP)](#chapter-5-domain-modeling--atomic-process-controllers-srp)
+7. [Chapter 6: Event-Driven Wash Cycle Coordinator FSM *(Upcoming)*](#chapter-6-event-driven-wash-cycle-coordinator-fsm)
+8. [Chapter 7: Safety Watchdogs, Fail-Safe Timeouts & I2C Vibration *(Upcoming)*](#chapter-7-safety-watchdogs-fail-safe-timeouts--i2c-vibration)
+9. [Chapter 8: WS2812B Addressable LED Engine & Hardware Migration (ESP32-C3) *(Upcoming)*](#chapter-8-ws2812b-addressable-led-engine--hardware-migration-esp32-c3)
 
 ---
 
@@ -210,15 +211,92 @@ To allow transitioning to addressable RGB LEDs (WS2812B) in the future without m
 
 ---
 
-## Chapter 5: Event-Driven Non-Blocking State Machine (FSM)
-*(Coming next: Implementing the central washing machine cycle coordinator FSM).*
+## Chapter 5: Domain Modeling & Atomic Process Controllers (SRP)
+
+As the project moved toward cycle orchestration, we confronted a critical architectural decision: how to coordinate complex physical actions (filling, agitating, draining, spinning) without creating an unmaintainable monolithic "God Class".
+
+```mermaid
+graph TD
+    subgraph Domain_Layer ["Core Domain (src/domain/)"]
+        DT["wash_types.hpp<br>(WaterLevel, WashProgram, WashStage, MachineState)"]
+    end
+
+    subgraph Process_Controllers ["Atomic Process Controllers (src/controllers/)"]
+        FC["FillController<br>(Valves + 12m Timeout + Pause)"]
+        AC["Agitator<br>(CW/CCW 300ms/200ms Stroke Machine)"]
+        DC["DrainController<br>(Pump + 30s Bleed + 6m Timeout)"]
+        SC["SpinController<br>(Clutch + Sprints + 4s/4s + Coast-Down)"]
+    end
+
+    subgraph Hardware_UI ["HAL & UI Adapters"]
+        HAL["HAL Drivers (Motor, Relays, Sensor)"]
+        UI["UI Drivers (LedPanel, Buzzer, Buttons)"]
+    end
+
+    FC --> DT
+    AC --> DT
+    DC --> DT
+    SC --> DT
+    HAL --> DT
+    UI --> DT
+    FC --> HAL
+    AC --> HAL
+    DC --> HAL
+    SC --> HAL
+```
+
+### 1. Eliminating Coupling Inversion with Domain Types
+In early prototypes, enums like `WashProgram` and `WashStage` were defined in `i_led_panel.hpp`, and `WaterLevel` was in `i_water_level_sensor.hpp`. This inverted dependency forced central business logic to include UI and sensor headers.
+
+We extracted all core concepts into [`src/domain/wash_types.hpp`](../src/domain/wash_types.hpp) in namespace `domain`. The domain is now completely pure: HAL, UI, and business logic depend solely on the domain model.
+
+### 2. Deconstructing the "God Class" via SRP
+Rather than handling solenoid timings, motor reversals, and drain timeouts inside one massive coordinator, each physical operation was isolated into an **Atomic Process Controller** with a unified lifecycle:
+
+| Controller | Single Responsibility | Key Features |
+| :--- | :--- | :--- |
+| [`FillController`](../src/controllers/fill_controller.hpp) | Tub water intake | Controls main/softener solenoids; 12-min fail-safe timeout; `pause()` freezes timeout counter. |
+| [`Agitator`](../src/controllers/agitator.hpp) | Mechanical fabric wash | 300 ms ON / 200 ms OFF stroke alternation; non-blocking CW/CCW reversal; preserves progress on `pause()`. |
+| [`DrainController`](../src/controllers/drain_controller.hpp) | Water evacuation | Controls pump; detects empty tub; executes 30-sec residual water bleeding; 6-min timeout; `pause()` freezes bleeding. |
+| [`SpinController`](../src/controllers/spin_controller.hpp) | Centrifugal water extraction | 5s clutch engagement; volume-based sprints; 4s ON / 4s OFF duty cycle; non-blocking transmission protection. |
+
+### 3. Deep-Dive: Top-Load Transmission Mechanics & Inertia Management
+Domestic top-load washing machine transmissions (e.g. Whirlpool/Brastemp/Consul) have unique mechanical constraints:
+- **Agitation Mode (Actuator OFF):** A heavy spring clamps the brake band onto the outer tub campana, keeping the tub stationary while the central shaft freely oscillates the agitator.
+- **Spin Mode (Actuator ON):** The electromechanical actuator pulls a mechanical arm, opening the brake band and meshing the ratchet clutch teeth. The entire drum spins at 700+ RPM.
+
+#### The "Violent Brake-Snap" Trap:
+If electrical power to the pump/actuator is cut while the drum is spinning at full speed, the brake spring instantly snaps the brake band onto the steel drum. This produces a loud mechanical crash ("tranco"), severely wearing the brake lining, straining the belt, and risking tooth shear on the plastic clutch came.
+
+#### The Software Solution: Non-Blocking `COAST_DOWN` Protection
+In [`SpinController`](../src/controllers/spin_controller.hpp), both normal cycle completion, `pause()`, and `stop()` pass through a 10-second `COAST_DOWN` phase:
+1. Power to the motor is cut immediately.
+2. The drain pump/actuator **remains energized** for 10 seconds, allowing the drum to decelerate smoothly through air resistance and natural friction.
+3. Only when the drum has settled does the controller de-energize the actuator, letting the brake engage quietly without mechanical shock.
+
+#### Rotational Inertia Duty Cycle (4s ON / 4s OFF):
+Continuous spin does not energize the single-phase AC induction motor non-stop. After the initial sprint ramp-down, it runs a **4000 ms ON / 4000 ms OFF** duty cycle. The high rotational momentum ($J \cdot \omega$) keeps the basket spinning at extraction velocity while cutting thermal load and electrical consumption by 50%.
+
+### 4. Dual-Target Test Growth
+With atomic process controllers, each physical action is tested independently with GoogleTest & GoogleMock:
+- `FillControllerTest` (6 tests): level cut-off, timeout detection, valve control, pause/resume.
+- `AgitatorTest` (4 tests): CW/CCW alternation, off-pause timing, duration completion, pause/resume.
+- `DrainControllerTest` (5 tests): empty detection, 30s bleed phase, timeout detection, pause/resume.
+- `SpinControllerTest` (7 tests): clutch engage, level-dependent sprints, 4s/4s duty run, coast-down, soft pause, soft stop, emergency stop.
+
+**Total Host Tests:** **58 tests passing in ~18 ms**.
 
 ---
 
-## Chapter 6: Safety Watchdogs, Fail-Safe Timeouts & I2C Vibration
-*(Coming soon: 12-minute water fill safety timeout and real-time I2C accelerometer out-of-balance detection).*
+## Chapter 6: Event-Driven Wash Cycle Coordinator FSM *(Upcoming)*
+*(Coming next: Orchestrating the 4 wash programs [Normal, Heavy, Rinse, Spin] by sequencing the atomic process controllers).*
 
 ---
 
-## Chapter 7: WS2812B Addressable LED Engine & Hardware Migration (ESP32-C3)
+## Chapter 7: Safety Watchdogs, Fail-Safe Timeouts & I2C Vibration *(Upcoming)*
+*(Coming soon: Real-time I2C accelerometer out-of-balance detection and hardware watchdogs).*
+
+---
+
+## Chapter 8: WS2812B Addressable LED Engine & Hardware Migration (ESP32-C3) *(Upcoming)*
 *(Coming soon: NeoPixel animation engine and porting to 32-bit ESP32-C3 architecture).*
