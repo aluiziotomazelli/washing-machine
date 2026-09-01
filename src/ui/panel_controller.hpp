@@ -53,6 +53,7 @@ private:
     bool softener_enabled_{false};
 
     domain::MachineState prev_state_{domain::MachineState::IDLE};
+    domain::WashStage prev_stage_{domain::WashStage::IDLE};
 };
 
 } // namespace ui
