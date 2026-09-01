@@ -38,7 +38,7 @@ static ui::DiscreteLedPins led_pins{
     config::k_led_level_low_pin,
     config::k_led_level_med_pin
 };
-static ui::DiscreteLedPanel led_panel(gpio_hal, led_pins);
+static ui::DiscreteLedPanel led_panel(gpio_hal, timer_hal, led_pins);
 
 // Actuators:
 static hal::DigitalOutput valve_main(gpio_hal, config::k_valve_main_pin);

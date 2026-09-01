@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include "mocks/mock_gpio_hal.hpp"
+#include "mocks/mock_timer_hal.hpp"
 #include "ui/discrete_led_panel.hpp"
 
 using ::testing::_;
@@ -11,6 +12,7 @@ using ::testing::InSequence;
 class DiscreteLedPanelTest : public ::testing::Test {
 protected:
     NiceMock<mocks::MockGpioHAL> mock_gpio;
+    NiceMock<mocks::MockTimerHAL> mock_timer;
 
     const uint8_t pin_power = 7;
     const uint8_t pin_softener = 6;
@@ -25,7 +27,7 @@ protected:
         pin_lvl_low, pin_lvl_med, 255
     };
 
-    ui::DiscreteLedPanel panel{mock_gpio, pins, true};
+    ui::DiscreteLedPanel panel{mock_gpio, mock_timer, pins, true};
 
     void SetUp() override
     {
@@ -43,7 +45,7 @@ TEST_F(DiscreteLedPanelTest, InitializesAllPinsToOutputAndOff)
     EXPECT_CALL(mock_gpio, set_mode(pin_lvl_low, hal::GpioMode::MODE_OUTPUT)).Times(1);
     EXPECT_CALL(mock_gpio, set_mode(pin_lvl_med, hal::GpioMode::MODE_OUTPUT)).Times(1);
 
-    ui::DiscreteLedPanel fresh_panel{mock_gpio, pins, true};
+    ui::DiscreteLedPanel fresh_panel{mock_gpio, mock_timer, pins, true};
     fresh_panel.init();
 }
 
@@ -57,6 +59,50 @@ TEST_F(DiscreteLedPanelTest, ControlsPowerAndSoftenerIndicators)
 
     EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_LOW)).Times(1);
     panel.set_power(false);
+}
+
+TEST_F(DiscreteLedPanelTest, SetsProgramsDuringIdleSelection)
+{
+    // NORMAL_WASH: wash=HIGH (solid), rinse=LOW, spin=LOW
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    panel.set_program(ui::WashProgram::NORMAL_WASH);
+
+    // RINSE_ONLY: wash=LOW, rinse=HIGH, spin=LOW
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    panel.set_program(ui::WashProgram::RINSE_ONLY);
+
+    // SPIN_ONLY: wash=LOW, rinse=LOW, spin=HIGH
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    panel.set_program(ui::WashProgram::SPIN_ONLY);
+}
+
+TEST_F(DiscreteLedPanelTest, HeavyWashProgramBlinksWashLedNonBlocking)
+{
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1000));
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    panel.set_program(ui::WashProgram::HEAVY_WASH);
+
+    // Update before 500ms -> no toggle
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1200));
+    panel.update();
+
+    // Update after 500ms -> toggles to LOW
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1500));
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    panel.update();
+
+    // Update after another 500ms -> toggles back to HIGH
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(2000));
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    panel.update();
 }
 
 TEST_F(DiscreteLedPanelTest, SetsWashStagesExclusively)

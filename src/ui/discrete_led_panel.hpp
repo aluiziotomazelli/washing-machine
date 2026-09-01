@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include "interfaces/i_led_panel.hpp"
 #include "../hal/interfaces/i_gpio_hal.hpp"
+#include "../hal/interfaces/i_timer_hal.hpp"
 
 namespace ui {
 
@@ -37,6 +38,7 @@ class DiscreteLedPanel : public ILedPanel {
 public:
     DiscreteLedPanel(
         hal::IGpioHAL& gpio_hal,
+        hal::ITimerHAL& timer_hal,
         const DiscreteLedPins& pins = DiscreteLedPins{},
         bool active_high = true
     );
@@ -48,18 +50,28 @@ public:
 
     void set_power(bool on) override;
     void set_softener(bool enabled) override;
+    void set_program(WashProgram program) override;
     void set_stage(WashStage stage) override;
     void set_selected_level(hal::WaterLevel level) override;
     void set_error(bool error) override;
     void turn_off_all() override;
 
 private:
+    void write_pin(uint8_t pin, bool state);
+
     hal::IGpioHAL& gpio_hal_;
+    hal::ITimerHAL& timer_hal_;
     DiscreteLedPins pins_;
     bool active_high_;
     bool is_initialized_{false};
 
-    void write_pin(uint8_t pin, bool on);
+    WashProgram current_program_{WashProgram::NORMAL_WASH};
+    bool is_blinking_wash_{false};
+    bool is_blinking_error_{false};
+    bool blink_state_{false};
+    uint32_t last_blink_time_ms_{0};
+
+    static constexpr uint16_t k_blink_interval_ms{500};
 };
 
 } // namespace ui
