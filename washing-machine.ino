@@ -1,5 +1,6 @@
 #include <Arduino.h>
 
+#include "src/hal/pinout.hpp"
 #include "src/hal/arduino/arduino_gpio_hal.hpp"
 #include "src/hal/arduino/arduino_timer_hal.hpp"
 #include "src/hal/digital_output.hpp"
@@ -14,20 +15,36 @@ static hal::ArduinoGpioHAL gpio_hal;
 static hal::ArduinoTimerHAL timer_hal;
 
 // UI Components:
-static ui::Button btn_softener(gpio_hal, timer_hal, 1);
-static ui::Button btn_start(gpio_hal, timer_hal, A3);
-static ui::Button btn_level(gpio_hal, timer_hal, A4);
-static ui::Button btn_program(gpio_hal, timer_hal, A5);
+static ui::Button btn_softener(gpio_hal, timer_hal, config::k_btn_softener_pin);
+static ui::Button btn_start(gpio_hal, timer_hal, config::k_btn_start_pin);
+static ui::Button btn_level(gpio_hal, timer_hal, config::k_btn_level_pin);
+static ui::Button btn_program(gpio_hal, timer_hal, config::k_btn_program_pin);
 
-static hal::PressureSwitchSensor water_level_sensor(gpio_hal, timer_hal);
-static ui::Buzzer buzzer(gpio_hal, timer_hal, 5, 3000);
-static ui::DiscreteLedPanel led_panel(gpio_hal);
+static hal::PressureSwitchConfig pressure_switch_cfg{
+    {config::k_pressure_switch_low_pin, hal::ContactType::NORMALLY_CLOSED},
+    {config::k_pressure_switch_med_pin, hal::ContactType::NORMALLY_OPEN},
+    {config::k_pressure_switch_high_pin, hal::ContactType::NORMALLY_OPEN}
+};
+static hal::PressureSwitchSensor water_level_sensor(gpio_hal, timer_hal, pressure_switch_cfg);
+
+static ui::Buzzer buzzer(gpio_hal, timer_hal, config::k_buzzer_pin, 3000);
+
+static ui::DiscreteLedPins led_pins{
+    config::k_led_power_pin,
+    config::k_led_softener_pin,
+    config::k_led_wash_pin,
+    config::k_led_rinse_pin,
+    config::k_led_spin_pin,
+    config::k_led_level_low_pin,
+    config::k_led_level_med_pin
+};
+static ui::DiscreteLedPanel led_panel(gpio_hal, led_pins);
 
 // Actuators:
-static hal::DigitalOutput valve_main(gpio_hal, 3);
-static hal::DigitalOutput valve_softener(gpio_hal, 2);
-static hal::DigitalOutput drain_pump(gpio_hal, 4);
-static hal::ReversibleMotor motor(gpio_hal, timer_hal, 8, 9);
+static hal::DigitalOutput valve_main(gpio_hal, config::k_valve_main_pin);
+static hal::DigitalOutput valve_softener(gpio_hal, config::k_valve_softener_pin);
+static hal::DigitalOutput drain_pump(gpio_hal, config::k_drain_pump_pin);
+static hal::ReversibleMotor motor(gpio_hal, timer_hal, config::k_motor_cw_pin, config::k_motor_ccw_pin);
 
 void setup()
 {
