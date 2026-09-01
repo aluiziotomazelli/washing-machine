@@ -23,13 +23,6 @@ PanelController::PanelController(
 
 void PanelController::init()
 {
-    btn_start_pause_.init();
-    btn_program_.init();
-    btn_water_level_.init();
-    btn_softener_.init();
-    buzzer_.init();
-    led_panel_.init();
-
     // Default initial selections
     selected_program_ = domain::WashProgram::NORMAL_WASH;
     selected_level_ = domain::WaterLevel::LOW_LEVEL;
