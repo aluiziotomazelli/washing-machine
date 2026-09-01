@@ -4,23 +4,18 @@
 #include "hal/digital_output.hpp"
 
 using ::testing::_;
-using ::testing::Return;
-using ::testing::NiceMock;
 using ::testing::InSequence;
+using ::testing::NiceMock;
+using ::testing::Return;
 
-class DigitalOutputTest : public ::testing::Test {
+class DigitalOutputTest : public ::testing::Test
+{
 protected:
     NiceMock<mocks::MockGpioHAL> mock_gpio;
 
-    void SetUp() override
-    {
-        hal::DigitalOutput::reset_registry();
-    }
+    void SetUp() override { hal::DigitalOutput::reset_registry(); }
 
-    void TearDown() override
-    {
-        hal::DigitalOutput::reset_registry();
-    }
+    void TearDown() override { hal::DigitalOutput::reset_registry(); }
 };
 
 TEST_F(DigitalOutputTest, InitializesPinModeAndDefaultState)
@@ -107,7 +102,7 @@ TEST_F(DigitalOutputTest, BatchOperationsViaIntrusiveLinkedList)
     EXPECT_TRUE(out2.is_on());
     EXPECT_TRUE(out3.is_on());
 
-    // Emergency batch turn off all (Your 2019 desligaAll!)
+    // Emergency batch turn off all
     hal::DigitalOutput::turn_off_all();
     EXPECT_FALSE(out1.is_on());
     EXPECT_FALSE(out2.is_on());
