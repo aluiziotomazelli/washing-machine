@@ -23,7 +23,7 @@ enum class GpioLevel : uint8_t {
 
 /**
  * @interface IGpioHAL
- * @brief Hardware Abstraction Layer interface for digital General Purpose I/O (Pins).
+ * @brief Hardware Abstraction Layer interface for digital General Purpose I/O and tone generation.
  */
 class IGpioHAL {
 public:
@@ -49,6 +49,19 @@ public:
      * @return Current logic level (LEVEL_LOW or LEVEL_HIGH).
      */
     virtual GpioLevel get_level(uint8_t pin) = 0;
+
+    /**
+     * @brief Generate a hardware square wave / audio tone on a pin (non-blocking).
+     * @param pin Hardware pin number.
+     * @param frequency_hz Tone frequency in Hertz.
+     */
+    virtual void play_tone(uint8_t pin, uint16_t frequency_hz) = 0;
+
+    /**
+     * @brief Stop hardware audio tone generation on a pin.
+     * @param pin Hardware pin number.
+     */
+    virtual void stop_tone(uint8_t pin) = 0;
 };
 
 } // namespace hal

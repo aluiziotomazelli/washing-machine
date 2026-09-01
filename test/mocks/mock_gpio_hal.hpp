@@ -14,6 +14,8 @@ public:
     MOCK_METHOD(void, set_mode, (uint8_t pin, hal::GpioMode mode), (override));
     MOCK_METHOD(void, set_level, (uint8_t pin, hal::GpioLevel level), (override));
     MOCK_METHOD(hal::GpioLevel, get_level, (uint8_t pin), (override));
+    MOCK_METHOD(void, play_tone, (uint8_t pin, uint16_t frequency_hz), (override));
+    MOCK_METHOD(void, stop_tone, (uint8_t pin), (override));
 };
 
 } // namespace mocks

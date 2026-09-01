@@ -29,4 +29,14 @@ GpioLevel ArduinoGpioHAL::get_level(uint8_t pin)
     return (digitalRead(pin) == HIGH) ? GpioLevel::LEVEL_HIGH : GpioLevel::LEVEL_LOW;
 }
 
+void ArduinoGpioHAL::play_tone(uint8_t pin, uint16_t frequency_hz)
+{
+    tone(pin, frequency_hz);
+}
+
+void ArduinoGpioHAL::stop_tone(uint8_t pin)
+{
+    noTone(pin);
+}
+
 } // namespace hal
