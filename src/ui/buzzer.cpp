@@ -2,12 +2,7 @@
 
 namespace ui {
 
-Buzzer::Buzzer(
-    hal::IGpioHAL& gpio_hal,
-    hal::ITimerHAL& timer_hal,
-    uint8_t pin,
-    uint16_t frequency_hz
-)
+Buzzer::Buzzer(hal::IGpioHAL& gpio_hal, hal::ITimerHAL& timer_hal, uint8_t pin, uint16_t frequency_hz)
     : gpio_hal_(gpio_hal)
     , timer_hal_(timer_hal)
     , pin_(pin)
@@ -48,7 +43,7 @@ void Buzzer::play_pattern(BuzzerPattern pattern)
         start_sequence(500, 0, 1, false);
         break;
     case BuzzerPattern::CYCLE_FINISHED:
-        start_sequence(120, 100, 4, false);
+        start_sequence(500, 500, 5, false);
         break;
     case BuzzerPattern::ERROR_ALARM:
         start_sequence(250, 250, 1, true);
@@ -92,18 +87,21 @@ void Buzzer::update()
                 is_playing_ = false;
             }
         }
-    } else {
+    }
+    else {
         if (now - phase_start_time_ms_ >= off_time_ms_) {
             if (remaining_beeps_ > 0) {
                 remaining_beeps_--;
                 is_sounding_ = true;
                 phase_start_time_ms_ = now;
                 apply_sound(true);
-            } else if (continuous_) {
+            }
+            else if (continuous_) {
                 is_sounding_ = true;
                 phase_start_time_ms_ = now;
                 apply_sound(true);
-            } else {
+            }
+            else {
                 is_playing_ = false;
             }
         }
@@ -114,7 +112,8 @@ void Buzzer::apply_sound(bool on)
 {
     if (on) {
         gpio_hal_.play_tone(pin_, frequency_hz_);
-    } else {
+    }
+    else {
         gpio_hal_.stop_tone(pin_);
     }
 }

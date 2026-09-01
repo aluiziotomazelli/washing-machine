@@ -1,4 +1,5 @@
 #include "panel_controller.hpp"
+#include "interfaces/i_buzzer.hpp"
 
 namespace ui {
 
@@ -97,7 +98,7 @@ void PanelController::handle_start_pause_click(ButtonClickType click)
     case ButtonClickType::VERY_LONG_CLICK:
         if (state == domain::MachineState::RUNNING || state == domain::MachineState::PAUSED) {
             coordinator_.stop_cycle();
-            buzzer_.beep(100);
+            buzzer_.play_pattern(BuzzerPattern::DOUBLE_BEEP);
         }
         break;
 
