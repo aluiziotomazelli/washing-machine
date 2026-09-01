@@ -1,18 +1,11 @@
 #pragma once
 
 #include <stdint.h>
+#include "../../domain/wash_types.hpp"
 
 namespace hal {
 
-/**
- * @brief Normalized water levels in the washing machine tub.
- */
-enum class WaterLevel : uint8_t {
-    EMPTY = 0,
-    LOW_LEVEL,
-    MEDIUM_LEVEL,
-    HIGH_LEVEL
-};
+using domain::WaterLevel;
 
 /**
  * @interface IWaterLevelSensor

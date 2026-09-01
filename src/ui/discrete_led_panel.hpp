@@ -52,7 +52,7 @@ public:
     void set_softener(bool enabled) override;
     void set_program(WashProgram program) override;
     void set_stage(WashStage stage) override;
-    void set_selected_level(hal::WaterLevel level) override;
+    void set_selected_level(WaterLevel level) override;
     void set_error(bool error) override;
     void turn_off_all() override;
 

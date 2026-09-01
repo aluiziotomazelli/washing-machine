@@ -131,12 +131,12 @@ TEST_F(DiscreteLedPanelTest, ControlsWaterLevelIndicators)
     // LOW_LEVEL: low=HIGH, med=LOW
     EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_HIGH)).Times(1);
     EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_LOW)).Times(1);
-    panel.set_selected_level(hal::WaterLevel::LOW_LEVEL);
+    panel.set_selected_level(domain::WaterLevel::LOW_LEVEL);
 
     // MEDIUM_LEVEL: low=LOW, med=HIGH
     EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_LOW)).Times(1);
     EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_HIGH)).Times(1);
-    panel.set_selected_level(hal::WaterLevel::MEDIUM_LEVEL);
+    panel.set_selected_level(domain::WaterLevel::MEDIUM_LEVEL);
 }
 
 TEST_F(DiscreteLedPanelTest, TurnsOffAllLedsOnPanel)

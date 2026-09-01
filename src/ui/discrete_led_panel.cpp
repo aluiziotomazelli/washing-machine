@@ -146,20 +146,20 @@ void DiscreteLedPanel::set_stage(WashStage stage)
     }
 }
 
-void DiscreteLedPanel::set_selected_level(hal::WaterLevel level)
+void DiscreteLedPanel::set_selected_level(WaterLevel level)
 {
     switch (level) {
-    case hal::WaterLevel::LOW_LEVEL:
+    case WaterLevel::LOW_LEVEL:
         write_pin(pins_.level_low, true);
         write_pin(pins_.level_med, false);
         write_pin(pins_.level_high, false);
         break;
-    case hal::WaterLevel::MEDIUM_LEVEL:
+    case WaterLevel::MEDIUM_LEVEL:
         write_pin(pins_.level_low, false);
         write_pin(pins_.level_med, true);
         write_pin(pins_.level_high, false);
         break;
-    case hal::WaterLevel::HIGH_LEVEL:
+    case WaterLevel::HIGH_LEVEL:
         if (pins_.level_high != 255) {
             write_pin(pins_.level_low, false);
             write_pin(pins_.level_med, false);
@@ -169,7 +169,7 @@ void DiscreteLedPanel::set_selected_level(hal::WaterLevel level)
             write_pin(pins_.level_med, true);
         }
         break;
-    case hal::WaterLevel::EMPTY:
+    case WaterLevel::EMPTY:
     default:
         write_pin(pins_.level_low, false);
         write_pin(pins_.level_med, false);

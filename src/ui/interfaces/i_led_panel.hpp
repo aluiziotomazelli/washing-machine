@@ -1,29 +1,13 @@
 #pragma once
 
 #include <stdint.h>
-#include "../../hal/interfaces/i_water_level_sensor.hpp"
+#include "../../domain/wash_types.hpp"
 
 namespace ui {
 
-/**
- * @brief Selectable wash programs for cycle execution.
- */
-enum class WashProgram : uint8_t {
-    NORMAL_WASH = 0, // Normal wash (agitation without soak)
-    HEAVY_WASH,      // Heavy wash (agitation + long soak)
-    RINSE_ONLY,      // Rinse only
-    SPIN_ONLY        // Spin only
-};
-
-/**
- * @brief Current operational washing stage for visual feedback during execution.
- */
-enum class WashStage : uint8_t {
-    IDLE = 0,
-    WASH,
-    RINSE,
-    SPIN
-};
+using domain::WashProgram;
+using domain::WashStage;
+using domain::WaterLevel;
 
 /**
  * @interface ILedPanel
@@ -66,7 +50,7 @@ public:
     /**
      * @brief Update the selected water level indicator.
      */
-    virtual void set_selected_level(hal::WaterLevel level) = 0;
+    virtual void set_selected_level(WaterLevel level) = 0;
 
     /**
      * @brief Set or clear error visual alarm.
