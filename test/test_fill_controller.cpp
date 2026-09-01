@@ -99,3 +99,43 @@ TEST_F(FillControllerTest, StopImmediatelyTurnsOffValves)
     fill_ctrl.stop();
     EXPECT_FALSE(fill_ctrl.is_active());
 }
+
+TEST_F(FillControllerTest, PausesAndResumesWithoutCountingPauseTimeTowardsTimeout)
+{
+    fill_ctrl.start(domain::WaterLevel::LOW_LEVEL, true);
+
+    // Run for 3 seconds
+    simulated_time_ms = 3000;
+    fill_ctrl.update();
+    EXPECT_TRUE(fill_ctrl.is_active());
+
+    // Pause filling
+    EXPECT_CALL(mock_valve_main, turn_off()).Times(1);
+    EXPECT_CALL(mock_valve_softener, turn_off()).Times(1);
+    fill_ctrl.pause();
+    EXPECT_TRUE(fill_ctrl.is_paused());
+
+    // Stay paused for 20 seconds (simulated_time_ms = 23000)
+    simulated_time_ms = 23000;
+    fill_ctrl.update(); // While paused, timeout should NOT trigger!
+    EXPECT_FALSE(fill_ctrl.has_error());
+
+    // Resume filling: valves reopen
+    EXPECT_CALL(mock_valve_main, turn_on()).Times(1);
+    EXPECT_CALL(mock_valve_softener, turn_on()).Times(1);
+    fill_ctrl.resume();
+    EXPECT_FALSE(fill_ctrl.is_paused());
+
+    // Advance 6 seconds more (total active time = 3s + 6s = 9s, still below 10s timeout)
+    simulated_time_ms = 29000;
+    fill_ctrl.update();
+    EXPECT_FALSE(fill_ctrl.has_error());
+
+    // Reach target level at 9.5s active
+    ON_CALL(mock_water_sensor, is_level_reached(domain::WaterLevel::LOW_LEVEL)).WillByDefault(Return(true));
+    EXPECT_CALL(mock_valve_main, turn_off()).Times(1);
+    EXPECT_CALL(mock_valve_softener, turn_off()).Times(1);
+    fill_ctrl.update();
+    EXPECT_TRUE(fill_ctrl.is_finished());
+    EXPECT_FALSE(fill_ctrl.has_error());
+}

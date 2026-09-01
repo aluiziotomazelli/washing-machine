@@ -11,6 +11,7 @@ namespace controllers {
 /**
  * @class FillController
  * @brief Manages water filling sequence, controlling inlet valves and enforcing timeout protection.
+ * Supports pause() and resume() to suspend filling and freeze timeout calculations.
  */
 class FillController {
 public:
@@ -24,9 +25,12 @@ public:
 
     void start(domain::WaterLevel target, bool use_softener = false);
     void update();
+    void pause();
+    void resume();
     void stop();
 
     bool is_active() const { return is_active_; }
+    bool is_paused() const { return is_paused_; }
     bool is_finished() const { return is_finished_; }
     bool has_error() const { return has_error_; }
 
@@ -40,8 +44,10 @@ private:
     domain::WaterLevel target_level_{domain::WaterLevel::LOW_LEVEL};
     bool use_softener_{false};
     uint32_t start_time_ms_{0};
+    uint32_t elapsed_before_pause_ms_{0};
 
     bool is_active_{false};
+    bool is_paused_{false};
     bool is_finished_{false};
     bool has_error_{false};
 };

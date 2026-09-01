@@ -10,6 +10,7 @@ namespace controllers {
 /**
  * @class DrainController
  * @brief Manages tub drainage, controlling the drain pump, bleeding residual water, and enforcing timeout limits.
+ * Supports pause() and resume() to suspend drainage without resetting progress or timeouts.
  */
 class DrainController {
 public:
@@ -27,9 +28,12 @@ public:
     void start(uint32_t bleed_duration_ms = 30000);
 
     void update();
+    void pause();
+    void resume();
     void stop();
 
     bool is_active() const { return is_active_; }
+    bool is_paused() const { return is_paused_; }
     bool is_bleeding() const { return bleeding_phase_; }
     bool is_finished() const { return is_finished_; }
     bool has_error() const { return has_error_; }
@@ -44,8 +48,12 @@ private:
     uint32_t start_time_ms_{0};
     uint32_t bleed_start_ms_{0};
 
+    uint32_t drain_elapsed_before_pause_ms_{0};
+    uint32_t bleed_elapsed_before_pause_ms_{0};
+
     bool bleeding_phase_{false};
     bool is_active_{false};
+    bool is_paused_{false};
     bool is_finished_{false};
     bool has_error_{false};
 };

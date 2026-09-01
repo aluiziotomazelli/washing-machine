@@ -96,3 +96,55 @@ TEST_F(DrainControllerTest, StopImmediatelyTurnsOffPump)
     drain_ctrl.stop();
     EXPECT_FALSE(drain_ctrl.is_active());
 }
+
+TEST_F(DrainControllerTest, PausesAndResumesDuringDrainingAndBleeding)
+{
+    drain_ctrl.start(3000); // 3s bleed
+
+    // Draining for 2 seconds (tub still has water)
+    simulated_time_ms = 2000;
+    ON_CALL(mock_water_sensor, is_empty()).WillByDefault(Return(false));
+    drain_ctrl.update();
+
+    // Pause draining
+    EXPECT_CALL(mock_drain_pump, turn_off()).Times(1);
+    drain_ctrl.pause();
+    EXPECT_TRUE(drain_ctrl.is_paused());
+
+    // While paused for 15 seconds, timeout should NOT trigger
+    simulated_time_ms = 17000;
+    drain_ctrl.update();
+    EXPECT_FALSE(drain_ctrl.has_error());
+
+    // Resume draining: pump restarts
+    EXPECT_CALL(mock_drain_pump, turn_on()).Times(1);
+    drain_ctrl.resume();
+    EXPECT_FALSE(drain_ctrl.is_paused());
+
+    // Tub becomes empty at 19000ms
+    simulated_time_ms = 19000;
+    ON_CALL(mock_water_sensor, is_empty()).WillByDefault(Return(true));
+    drain_ctrl.update();
+    EXPECT_TRUE(drain_ctrl.is_bleeding());
+
+    // 1s into bleed (19000 + 1000 = 20000), pause again during bleed!
+    simulated_time_ms = 20000;
+    drain_ctrl.update();
+    EXPECT_CALL(mock_drain_pump, turn_off()).Times(1);
+    drain_ctrl.pause();
+    EXPECT_TRUE(drain_ctrl.is_paused());
+
+    // Resume bleed: needs 2s more to finish 3s bleed
+    EXPECT_CALL(mock_drain_pump, turn_on()).Times(1);
+    simulated_time_ms = 25000;
+    drain_ctrl.resume();
+
+    simulated_time_ms = 26000; // 1s more (2s total bleed)
+    drain_ctrl.update();
+    EXPECT_FALSE(drain_ctrl.is_finished());
+
+    simulated_time_ms = 27000; // 2s more (3s total bleed) -> finishes!
+    EXPECT_CALL(mock_drain_pump, turn_off()).Times(1);
+    drain_ctrl.update();
+    EXPECT_TRUE(drain_ctrl.is_finished());
+}

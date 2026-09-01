@@ -22,8 +22,10 @@ void FillController::start(domain::WaterLevel target, bool use_softener)
     target_level_ = target;
     use_softener_ = use_softener;
     start_time_ms_ = timer_hal_.get_time_ms();
+    elapsed_before_pause_ms_ = 0;
 
     is_active_ = true;
+    is_paused_ = false;
     is_finished_ = false;
     has_error_ = false;
 
@@ -37,7 +39,7 @@ void FillController::start(domain::WaterLevel target, bool use_softener)
 
 void FillController::update()
 {
-    if (!is_active_) {
+    if (!is_active_ || is_paused_) {
         return;
     }
 
@@ -50,9 +52,39 @@ void FillController::update()
 
     // Check timeout
     uint32_t now = timer_hal_.get_time_ms();
-    if (now - start_time_ms_ >= timeout_ms_) {
+    uint32_t total_elapsed = elapsed_before_pause_ms_ + (now - start_time_ms_);
+    if (total_elapsed >= timeout_ms_) {
         stop();
         has_error_ = true;
+    }
+}
+
+void FillController::pause()
+{
+    if (!is_active_ || is_paused_) {
+        return;
+    }
+
+    uint32_t now = timer_hal_.get_time_ms();
+    elapsed_before_pause_ms_ += (now - start_time_ms_);
+
+    valve_main_.turn_off();
+    valve_softener_.turn_off();
+    is_paused_ = true;
+}
+
+void FillController::resume()
+{
+    if (!is_active_ || !is_paused_) {
+        return;
+    }
+
+    start_time_ms_ = timer_hal_.get_time_ms();
+    is_paused_ = false;
+
+    valve_main_.turn_on();
+    if (use_softener_) {
+        valve_softener_.turn_on();
     }
 }
 
@@ -61,6 +93,7 @@ void FillController::stop()
     valve_main_.turn_off();
     valve_softener_.turn_off();
     is_active_ = false;
+    is_paused_ = false;
 }
 
 } // namespace controllers
