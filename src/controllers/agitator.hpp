@@ -28,6 +28,7 @@ public:
     void stop();
 
     bool is_active() const { return is_active_; }
+    bool is_paused() const { return is_paused_; }
     bool is_finished() const { return is_finished_; }
 
 private:
