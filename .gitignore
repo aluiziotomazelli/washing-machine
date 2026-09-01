@@ -9,6 +9,12 @@ build/
 *.out
 test_runner
 
+# Test coverage reports and artifacts
+test/coverage/
+*.gcda
+*.gcno
+*.gcov
+
 # Test libraries (downloaded on demand)
 test/lib/
 

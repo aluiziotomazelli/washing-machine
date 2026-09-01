@@ -20,7 +20,10 @@ HOST_CXXFLAGS = -std=c++17 -Wall -Wextra -pthread -Isrc -Itest $(GMOCK_INC) -DHO
 TEST_SRC = $(wildcard test/*.cpp) $(shell find src -name "*.cpp" ! -path "*/arduino/*")
 TEST_BIN = $(BUILD_DIR)/test_runner
 
-.PHONY: all build flash test clean compile-db setup-gtest
+COVERAGE_DIR = test/coverage
+COVERAGE_INFO = $(BUILD_DIR)/coverage.info
+
+.PHONY: all build flash test coverage clean compile-db setup-gtest
 
 all: build
 
@@ -60,6 +63,25 @@ test: $(GOOGLETEST_DIR)
 	@echo "==> Running Host Unit Tests..."
 	@$(TEST_BIN)
 
+# ------------------------------------------------------------------------------
+# Code Coverage with lcov & genhtml (HTML in test/coverage/)
+# ------------------------------------------------------------------------------
+coverage: $(GOOGLETEST_DIR)
+	@mkdir -p $(BUILD_DIR) $(COVERAGE_DIR)
+	@rm -rf $(COVERAGE_DIR)/* $(BUILD_DIR)/*.gcda $(BUILD_DIR)/*.gcno *.gcda *.gcno
+	@echo "==> Compiling with coverage instrumentation..."
+	@$(HOST_CXX) $(HOST_CXXFLAGS) --coverage $(GMOCK_SRC) $(TEST_SRC) -o $(BUILD_DIR)/coverage_runner
+	@echo "==> Running Host Unit Tests for Coverage..."
+	@./$(BUILD_DIR)/coverage_runner
+	@echo "==> Capturing coverage data with lcov..."
+	@lcov --capture --directory . --output-file $(COVERAGE_INFO) --ignore-errors mismatch,gcov --exclude '*/test/*' --exclude '/usr/*' --quiet
+	@echo "==> Generating HTML Coverage Report in $(COVERAGE_DIR)..."
+	@genhtml $(COVERAGE_INFO) --output-directory $(COVERAGE_DIR) --title "Washing Machine Code Coverage" --quiet --ignore-errors source
+	@echo ""
+	@lcov --list $(COVERAGE_INFO)
+	@echo ""
+	@echo "==> HTML report successfully generated at: $(COVERAGE_DIR)/index.html"
+
 clean:
 	@echo "==> Cleaning build artifacts..."
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_DIR) $(COVERAGE_DIR) *.gcda *.gcno *.gcov
