@@ -15,6 +15,7 @@ struct StripLedConfig {
     uint8_t future_brightness{15};     // Dim brightness for upcoming stages during RUNNING
     uint16_t breathe_period_ms{2000};  // Period of smooth breathing animation in RUNNING (2s)
     uint16_t blink_interval_ms{500};   // Period of strobe in PAUSED and ERROR (500ms)
+    uint8_t frame_interval_ms{20};     // Frame throttle interval (20ms -> 50 FPS)
 };
 
 /**
@@ -94,6 +95,7 @@ private:
     bool is_initialized_{false};
     bool blink_state_{true};
     uint32_t last_blink_time_ms_{0};
+    uint32_t last_frame_time_ms_{0};
 };
 
 } // namespace ui

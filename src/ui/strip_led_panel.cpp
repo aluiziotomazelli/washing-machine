@@ -71,6 +71,12 @@ void StripLedPanel::update()
 
     uint32_t now = timer_hal_.get_time_ms();
 
+    // Rate limiter: render frame only at configured interval (e.g. 20ms -> 50 FPS)
+    if (now - last_frame_time_ms_ < config_.frame_interval_ms) {
+        return;
+    }
+    last_frame_time_ms_ = now;
+
     if (now - last_blink_time_ms_ >= config_.blink_interval_ms) {
         last_blink_time_ms_ = now;
         blink_state_ = !blink_state_;
