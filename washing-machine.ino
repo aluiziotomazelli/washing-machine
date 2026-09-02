@@ -1,6 +1,5 @@
 #include <Arduino.h>
 
-#include "src/domain/wash_types.hpp"
 #include "src/hal/pinout.hpp"
 #include "src/hal/arduino/arduino_gpio_hal.hpp"
 #include "src/hal/arduino/arduino_timer_hal.hpp"
@@ -100,7 +99,6 @@ void setup()
     // Audible alert if reboot was caused by Watchdog freeze recovery
     if (recovered_from_wdt) {
         buzzer.play_pattern(ui::BuzzerPattern::DOUBLE_BEEP);
-        coordinator.trigger_error(domain::MachineError::DRAIN_TIMEOUT);
     }
 }
 
