@@ -78,7 +78,7 @@ public:
 
 private:
     void render_frame(uint32_t now);
-    void apply_color(uint8_t index, const hal::RgbColor& base_color, uint8_t brightness);
+    void apply_color(uint8_t index, hal::RgbColor base_color, uint8_t brightness);
     uint8_t calculate_breathe_brightness(uint32_t now) const;
 
     hal::IRgbStrip& strip_;

@@ -8,7 +8,8 @@
 #include "src/hal/pressure_switch_sensor.hpp"
 #include "src/ui/button.hpp"
 #include "src/ui/buzzer.hpp"
-#include "src/ui/discrete_led_panel.hpp"
+#include "src/hal/ws2812_strip.hpp"
+#include "src/ui/strip_led_panel.hpp"
 #include "src/controllers/fill_controller.hpp"
 #include "src/controllers/agitator.hpp"
 #include "src/controllers/drain_controller.hpp"
@@ -35,16 +36,9 @@ static hal::PressureSwitchSensor water_level_sensor(gpio_hal, timer_hal, pressur
 
 static ui::Buzzer buzzer(gpio_hal, timer_hal, config::k_buzzer_pin, 3000);
 
-static ui::DiscreteLedPins led_pins{
-    config::k_led_power_pin,
-    config::k_led_softener_pin,
-    config::k_led_wash_pin,
-    config::k_led_rinse_pin,
-    config::k_led_spin_pin,
-    config::k_led_level_low_pin,
-    config::k_led_level_med_pin
-};
-static ui::DiscreteLedPanel led_panel(gpio_hal, timer_hal, led_pins);
+// Addressable RGB LED Strip Panel (9 Pixels WS2812B)
+static hal::Ws2812Strip led_strip(config::k_led_strip_pin, 9);
+static ui::StripLedPanel led_panel(led_strip, timer_hal);
 
 // Actuators:
 static hal::DigitalOutput valve_main(gpio_hal, config::k_valve_main_pin);

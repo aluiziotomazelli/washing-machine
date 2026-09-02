@@ -2,6 +2,12 @@
 
 namespace ui {
 
+constexpr hal::RgbColor StripLedPanel::k_color_pink;
+constexpr hal::RgbColor StripLedPanel::k_color_cyan;
+constexpr hal::RgbColor StripLedPanel::k_color_white;
+constexpr hal::RgbColor StripLedPanel::k_color_red;
+constexpr hal::RgbColor StripLedPanel::k_color_off;
+
 StripLedPanel::StripLedPanel(
     hal::IRgbStrip& strip,
     hal::ITimerHAL& timer_hal,
@@ -85,7 +91,7 @@ void StripLedPanel::update()
     render_frame(now);
 }
 
-void StripLedPanel::apply_color(uint8_t index, const hal::RgbColor& base_color, uint8_t brightness)
+void StripLedPanel::apply_color(uint8_t index, hal::RgbColor base_color, uint8_t brightness)
 {
     // Global max_brightness scaling: (brightness * max_brightness) / 255
     uint8_t scaled_b = static_cast<uint8_t>((static_cast<uint16_t>(brightness) * config_.max_brightness) / 255);
