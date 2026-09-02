@@ -2,11 +2,7 @@
 
 namespace ui {
 
-Button::Button(
-    hal::IGpioHAL& gpio_hal,
-    hal::ITimerHAL& timer_hal,
-    uint8_t pin,
-    const ButtonConfig& config)
+Button::Button(hal::IGpioHAL& gpio_hal, hal::ITimerHAL& timer_hal, uint8_t pin, const ButtonConfig& config)
     : gpio_hal_(gpio_hal)
     , timer_hal_(timer_hal)
     , pin_(pin)
@@ -28,7 +24,8 @@ void Button::init()
 
     if (config_.enable_internal_pull) {
         gpio_hal_.set_mode(pin_, config_.active_low ? hal::GpioMode::MODE_INPUT_PULLUP : hal::GpioMode::MODE_INPUT);
-    } else {
+    }
+    else {
         gpio_hal_.set_mode(pin_, hal::GpioMode::MODE_INPUT);
     }
 
@@ -79,7 +76,8 @@ void Button::update()
         if (now - press_start_time_ms_ >= config_.debounce_press_ms) {
             if (current_level == pressed_level) {
                 state_ = State::WAIT_FOR_RELEASE;
-            } else {
+            }
+            else {
                 state_ = State::WAIT_FOR_PRESS;
             }
         }
@@ -92,14 +90,17 @@ void Button::update()
             if (duration >= config_.very_long_click_ms) {
                 state_ = State::WAIT_FOR_PRESS;
                 last_click_type_ = ButtonClickType::VERY_LONG_CLICK;
-            } else if (duration >= config_.long_click_ms) {
+            }
+            else if (duration >= config_.long_click_ms) {
                 state_ = State::WAIT_FOR_PRESS;
                 last_click_type_ = ButtonClickType::LONG_CLICK;
-            } else {
+            }
+            else {
                 last_time_ms_ = now;
                 state_ = State::DEBOUNCE_RELEASE;
             }
-        } else if (now - press_start_time_ms_ >= config_.timeout_ms) {
+        }
+        else if (now - press_start_time_ms_ >= config_.timeout_ms) {
             state_ = State::TIMEOUT_WAIT_FOR_RELEASE;
             last_time_ms_ = now;
         }
@@ -116,12 +117,14 @@ void Button::update()
             last_time_ms_ = now;
             first_click_ = true;
             state_ = State::DEBOUNCE_PRESS;
-        } else if (now - last_time_ms_ >= config_.double_click_ms) {
+        }
+        else if (now - last_time_ms_ >= config_.double_click_ms) {
             state_ = State::WAIT_FOR_PRESS;
             if (first_click_) {
                 first_click_ = false;
                 last_click_type_ = ButtonClickType::DOUBLE_CLICK;
-            } else {
+            }
+            else {
                 last_click_type_ = ButtonClickType::CLICK;
             }
         }
@@ -134,7 +137,8 @@ void Button::update()
                 state_ = State::WAIT_FOR_PRESS;
                 last_click_type_ = ButtonClickType::TIMEOUT;
             }
-        } else {
+        }
+        else {
             last_time_ms_ = now;
             if (now - press_start_time_ms_ >= 2 * config_.timeout_ms) {
                 state_ = State::WAIT_FOR_PRESS;

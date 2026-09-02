@@ -43,7 +43,9 @@ void PanelController::update()
     btn_water_level_.update();
     btn_softener_.update();
     buzzer_.update();
-    led_panel_.update();
+    if (!buzzer_.is_playing()) {
+        led_panel_.update();
+    }
 
     ButtonClickType sp_click = btn_start_pause_.get_last_click();
     if (sp_click != ButtonClickType::NONE_CLICK) {
@@ -114,6 +116,11 @@ void PanelController::handle_program_click()
         return;
     }
 
+    if (state == domain::MachineState::FINISHED) {
+        coordinator_.stop_cycle();
+        sync_state_with_coordinator();
+    }
+
     switch (selected_program_) {
     case domain::WashProgram::NORMAL_WASH:
         selected_program_ = domain::WashProgram::HEAVY_WASH;
@@ -141,6 +148,11 @@ void PanelController::handle_water_level_click()
         return;
     }
 
+    if (state == domain::MachineState::FINISHED) {
+        coordinator_.stop_cycle();
+        sync_state_with_coordinator();
+    }
+
     // Toggle between LOW_LEVEL and MEDIUM_LEVEL (HIGH_LEVEL is disabled on this PCB)
     if (selected_level_ == domain::WaterLevel::LOW_LEVEL) {
         selected_level_ = domain::WaterLevel::MEDIUM_LEVEL;
@@ -158,6 +170,11 @@ void PanelController::handle_softener_click()
     domain::MachineState state = coordinator_.get_state();
     if (state != domain::MachineState::IDLE && state != domain::MachineState::FINISHED) {
         return;
+    }
+
+    if (state == domain::MachineState::FINISHED) {
+        coordinator_.stop_cycle();
+        sync_state_with_coordinator();
     }
 
     softener_enabled_ = !softener_enabled_;

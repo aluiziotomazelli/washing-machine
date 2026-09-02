@@ -11,9 +11,10 @@
 4. [Chapter 3: Dual-Target Development with GoogleTest, Google Mock & Automated CI](#chapter-3-dual-target-development-with-googletest-google-mock--automated-ci)
 5. [Chapter 4: Actuator Safety, Motor Dead-Time & Peripheral Drivers](#chapter-4-actuator-safety-motor-dead-time--peripheral-drivers)
 6. [Chapter 5: Domain Modeling & Atomic Process Controllers (SRP)](#chapter-5-domain-modeling--atomic-process-controllers-srp)
-7. [Chapter 6: Event-Driven Wash Cycle Coordinator FSM *(Upcoming)*](#chapter-6-event-driven-wash-cycle-coordinator-fsm)
-8. [Chapter 7: Safety Watchdogs, Fail-Safe Timeouts & I2C Vibration *(Upcoming)*](#chapter-7-safety-watchdogs-fail-safe-timeouts--i2c-vibration)
-9. [Chapter 8: WS2812B Addressable LED Engine & Hardware Migration (ESP32-C3) *(Upcoming)*](#chapter-8-ws2812b-addressable-led-engine--hardware-migration-esp32-c3)
+7. [Chapter 6: Event-Driven Wash Cycle Coordinator FSM & Clean UI Architecture](#chapter-6-event-driven-wash-cycle-coordinator-fsm--clean-ui-architecture)
+8. [Chapter 7: The WS2812B Addressable LED Engine, Hardware Re-spin & The AVR Interrupt Collision Dilemma](#chapter-7-the-ws2812b-addressable-led-engine-hardware-re-spin--the-avr-interrupt-collision-dilemma)
+9. [Chapter 8: Safety Watchdogs, Out-of-Balance Sensing & I2C Vibration *(Upcoming)*](#chapter-8-safety-watchdogs-out-of-balance-sensing--i2c-vibration)
+10. [Chapter 9: Hardware Migration to 32-bit Architecture (ESP32-C3) *(Upcoming)*](#chapter-9-hardware-migration-to-32-bit-architecture-esp32-c3)
 
 ---
 
@@ -203,7 +204,7 @@ The physical electromechanical pressure switch features mixed contact topologies
 The appliance uses a passive piezoelectric transducer without an internal oscillator. [`ui::Buzzer`](../src/ui/buzzer.hpp) utilizes non-blocking 3000 Hz hardware tone generation (`play_tone` / `stop_tone`) to produce acoustic cues:
 - `SHORT_BEEP` (50 ms button click feedback)
 - `DOUBLE_BEEP` (function toggle)
-- `CYCLE_FINISHED` (4-beep completion tune)
+- `CYCLE_FINISHED` (4 loud, repetitive finish beeps to alert from afar)
 - `ERROR_ALARM` (continuous alternating alarm)
 
 ### 5. Decoupled Visual Feedback: `ILedPanel` & `DiscreteLedPanel`
@@ -370,10 +371,136 @@ void loop() {
 
 ---
 
-## Chapter 7: Safety Watchdogs, Out-of-Balance Sensing & I2C Vibration *(Upcoming)*
-*(Coming in v0.4.0: Real-time I2C accelerometer vibration detection, unbalanced tub emergency pause, and AVR hardware watchdogs).*
+## Chapter 7: The WS2812B Addressable LED Engine, Hardware Re-spin & The AVR Interrupt Collision Dilemma
+
+With the discrete LED release (`v0.3.1`) validated and archived, the physical control panel (wooden box) presented a compelling mechanical and visual opportunity: replacing the complex harness of 7 discrete through-hole LEDs with a single, compact **9-pixel WS2812B addressable RGB strip**.
+
+This upgrade introduced fascinating embedded challenges spanning cycle-accurate AVR assembly, real-world analog voltage levels, and timer interrupt collisions.
+
+```
+Physical Layout of the 9-Pixel Strip (docs/box.webp):
+[ P8 ]       [ P7 ]       [ P6 ]   [ P5 ]   [ P4 ]       [ P3 ]       [ P2 ]   [ P1 ]   [ P0 ]
+Amac.        Vazio        Baixo    Médio    Alto         Pesado       Lavar    Enxag.   Centrif.
+(Rose)       (OFF)       (Cyan)   (Cyan)   (Cyan)       (White)      (White)  (White)  (White)
+  ◄────────────────────────────────── Physical Strip Orientation ────────────────────────────── DIN
+```
 
 ---
 
-## Chapter 8: WS2812B Addressable LED Engine & Hardware Migration (ESP32-C3) *(Upcoming)*
-*(Coming in v0.5.0: NeoPixel animation engine and porting to 32-bit ESP32-C3 architecture).*
+### 1. The Zero-Heap 16 MHz AVR Assembly Driver (`Ws2812Strip`)
+
+Standard third-party libraries (like FastLED or Adafruit NeoPixel) bring significant flash overhead, dynamic memory allocations, and monolithic dependencies unsuitable for a safety-critical appliance on an ATmega328P.
+
+We engineered a bespoke, zero-heap hardware driver [`Ws2812Strip`](../src/hal/ws2812_strip.hpp) adhering to Clean Architecture:
+- **Static Buffer:** Exactly $9 \times 3 = 27$ bytes in GRB color order. Zero heap allocation (`malloc` free).
+- **Nanosecond-Accurate Inline Assembly:** The WS2812B 800 kHz protocol requires strict timing:
+  - Bit `0`: 350 ns HIGH followed by 800 ns LOW.
+  - Bit `1`: 700 ns HIGH followed by 600 ns LOW.
+- **Dynamic Register Mapping:** Rather than hardcoding I/O ports in assembly, the driver dynamically resolves the AVR port address and bitmask at runtime (`portOutputRegister(digitalPinToPort(pin_))` and `digitalPinToBitMask(pin_)`), enabling zero-recompilation pin reassignments.
+- **Host Testing Support:** In host mode (`-DHOST_TEST`), the driver logs byte buffers cleanly, enabling unit testing without hardware.
+
+---
+
+### 2. Polimorphic UI Abstraction (`StripLedPanel`)
+
+Thanks to the interface inversion introduced in Chapter 6 ([`ILedPanel`](../src/ui/interfaces/i_led_panel.hpp)), migrating the machine from discrete LEDs to the RGB strip required **zero modifications** to `PanelController` or domain logic.
+
+The [`StripLedPanel`](../src/ui/strip_led_panel.hpp) implements:
+- **Dual-Tone Modern Aesthetic:** Water levels glow exclusively in Cyan (`0, 220, 255`), wash stages in Pure White (`255, 255, 255`), and the softener indicator in a pastel rose (`255, 100, 140`).
+- **Smooth "Breathing" Animation (2-second Period):** The active running stage oscillates smoothly in brightness, future stages maintain a faint 15% standby glow, finished stages extinguish, and paused states pulse synchronously.
+- **Integer-Only Wave Math:** Rather than importing heavy floating-point `sin()` math (which consumes ~1.5 KB of AVR Flash), the breathing animation employs integer-only symmetrical triangle wave math:
+  ```cpp
+  uint16_t phase = now % 2000;
+  uint8_t wave = (phase < 1000) ? (phase * 255) / 1000 : ((2000 - phase) * 255) / 1000;
+  ```
+- **Isolated Diagnostic Strobe:** Inlet timeout (`FILL_TIMEOUT`) blinks water levels in Red; drain pump timeout (`DRAIN_TIMEOUT`) blinks program stages in Red.
+
+---
+
+### 3. Hardware Re-Spin & The Analog "D13 Pull-Up Trap"
+
+Reorganizing the physical ATmega328P wiring reduced the panel interconnect from 12 messy loose wires to a single **7-conductor ribbon cable** with a shared GND:
+- `+5V` (Strip VCC)
+- `GND` (Common ground for WS2812 strip and all 4 pushbuttons)
+- `D6` (WS2812 DIN data line, direct 0Ω connection)
+- `D7 / A3` (Softener button)
+- `A0 (Pin 14)` (Program button, with 1kΩ series protection)
+- `A1 (Pin 15)` (Start-Pause button, with 1kΩ series protection)
+- `A2 (Pin 16)` (Water Level button, with 1kΩ series protection)
+- **Freed Pins:** Analog pins **`A4 (SDA)`** and **`A5 (SCL)`** were successfully liberated and reserved for the upcoming I2C accelerometer bus.
+
+#### ⚠️ The D13 Electrical Clamping Trap
+During initial board testing, buttons on pins A0, A1, and A2 responded flawlessly, but a button wired to **D13** failed to trigger any clicks despite electrical contact.
+
+**The Root Cause:**
+- On Arduino Pro Mini boards, D13 has a surface-mount LED and series resistor tied to GND.
+- When configuring D13 with `INPUT_PULLUP`, the weak internal pull-up (~30 kΩ) forms a voltage divider with the onboard LED.
+- The forward voltage drop ($V_f$) of the red LED clamps the pin at $\approx 1.8\text{V} - 2.0\text{V}$ when the button is released.
+- On an ATmega328P powered at 5V, the minimum HIGH input threshold ($V_{IH}$) is $0.6 \times V_{CC} = \mathbf{3.0\text{V}}$.
+- Because 1.8V is well below 3.0V, the digital Schmitt trigger never saw a valid release transition (`LEVEL_HIGH`), keeping the button FSM permanently trapped!
+- **Resolution:** Buttons were placed on clean GPIOs without onboard LEDs (A0, A1, A2, A3), while the 1kΩ external series resistors reliably pull the pin down to $V_{pin} \approx 0.16\text{V} \ll 1.5\text{V}$ ($V_{IL}$), providing superior ESD and noise rejection.
+
+---
+
+### 4. The AVR Interrupt Collision Dilemma: Tone vs. CLI
+
+When testing long acoustic beeps, an unexpected audio glitch occurred: the piezo buzzer emitted a stuttering, tremolo buzz rather than a smooth, pure tone.
+
+#### The Analysis:
+1. The Arduino `tone()` function configures **Timer 2** in CTC mode to toggle the buzzer pin at 3000 Hz, firing an interrupt every **$166\,\mu\text{s}$**.
+2. The WS2812B bit-banging protocol demands zero jitter, requiring interrupts to be completely disabled (`cli()`) during transmission.
+3. Transmitting 9 pixels ($9 \times 24\text{ bits} \times 1.25\,\mu\text{s}$) holds interrupts disabled for **$270\,\mu\text{s}$**.
+4. Because $270\,\mu\text{s} > 166\,\mu\text{s}$, the Timer 2 interrupt was delayed or missed **50 times every second** (at 50 FPS), audibly modulating the carrier wave with a 50 Hz flutter!
+
+#### The Clean Architectural Solution:
+Because WS2812 pixels contain internal latching shift registers, **LEDs do not need continuous data transmission to maintain their state**.
+
+Rather than coupling the Buzzer to the Strip, the **`PanelController`** coordinates UI execution:
+```cpp
+void PanelController::update()
+{
+    buzzer_.update();
+
+    // Suppress LED frame pushes during active audio output:
+    if (!buzzer_.is_playing()) {
+        led_panel_.update();
+    }
+    ...
+```
+- While a 50 ms button click beep or repeated loud finish beeps are sounding, frame transmission is paused.
+- The human eye cannot perceive a 50 ms pause in a slow 2-second breathing wave, but the human ear instantly perceives the pristine, pure 3000 Hz tone.
+- In addition, the strip frame rate was throttled to **30 FPS** (`frame_interval_ms = 33`), reducing the total CPU duty cycle consumed by the WS2812 engine to under **0.8%**!
+
+---
+
+### 5. Appliance Standby & Wake-Up UX
+
+To match the behavior of modern domestic appliances:
+- **Standby Sleep:** When the cycle completes, the coordinator enters `FINISHED`. The LED strip shuts off completely to save power.
+- **Wake-Up on Interaction:** Touching any configuration button (Program, Level, Softener) automatically calls `coordinator.stop_cycle()`, transitioning the machine back to `IDLE` and instantly waking up the LED display with the updated settings.
+
+---
+
+### 6. Milestone Metrics & Readiness
+
+| Metric | Legacy v0.1.0 | FSM v0.3.1 (Discrete) | Strip v0.4.0 (WS2812) |
+| :--- | :--- | :--- | :--- |
+| **Flash ROM** | 7,130 B (23%) | 14,976 B (48%) | **15,822 B (51%)** |
+| **Static SRAM** | 358 B (17%) | 721 B (35%) | **821 B (40%)** |
+| **Dynamic Heap** | 0 B | 0 B | **0 B (Zero Heap)** |
+| **Automated Tests** | 0 tests | 80 tests | **100 tests (100% pass, 30 ms)** |
+| **Panel Wires** | 12 loose wires | 12 loose wires | **7-conductor flat ribbon** |
+| **Free GPIOs** | 0 pins | 0 pins | **A4/A5 I2C + A6/A7 Free** |
+
+The firmware is now **production-ready and field-tested** for all domestic washing machines with functional mechanical balance.
+
+---
+
+## Chapter 8: Safety Watchdogs, Out-of-Balance Sensing & I2C Vibration *(Upcoming - v0.4.0)*
+*(Coming in v0.4.0: Accelerometer integration on the liberated I2C bus [A4/A5], detecting severe mechanical off-balance during spin acceleration, and AVR hardware watchdogs).*
+
+---
+
+## Chapter 9: Hardware Migration to 32-bit Architecture (ESP32-C3) *(Upcoming)*
+*(Coming in future releases: Native FreeRTOS multitasking, telemetry, and migration to modern 32-bit RISC-V silicon).*
+
