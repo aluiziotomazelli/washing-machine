@@ -184,3 +184,52 @@ TEST_F(WashCycleCoordinatorTest, DrainTimeoutTransitionsToDrainTimeoutError)
     EXPECT_EQ(coordinator.get_error(), domain::MachineError::DRAIN_TIMEOUT);
     EXPECT_FALSE(drain_ctrl.is_active());
 }
+
+TEST_F(WashCycleCoordinatorTest, SeamlessHandoverFromDrainToSpinNeverTurnsOffPump)
+{
+    // Start with tub containing water so pump turns on
+    ON_CALL(mock_water_sensor, is_empty()).WillByDefault(Return(false));
+    EXPECT_CALL(mock_drain_pump, turn_on()).Times(AtLeast(1));
+
+    coordinator.start_cycle(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false);
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::DRAIN);
+
+    // Tub becomes empty at 2000ms
+    simulated_time_ms = 2000;
+    ON_CALL(mock_water_sensor, is_empty()).WillByDefault(Return(true));
+    coordinator.update();
+
+    // During the entire transition from DRAIN to SPIN, turn_off() MUST NOT be called!
+    EXPECT_CALL(mock_drain_pump, turn_off()).Times(0);
+
+    // Bleed duration expires (30s) -> transitions into SPIN_FINAL
+    simulated_time_ms += 31000;
+    coordinator.update();
+
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::SPIN_FINAL);
+    EXPECT_TRUE(spin_ctrl.is_active());
+}
+
+TEST_F(WashCycleCoordinatorTest, HandoverFromDrainToFillTurnsOffPump)
+{
+    // Normal wash: Step 0 is FILL, Step 1 is AGITATE, Step 2 is DRAIN
+    coordinator.start_cycle(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false);
+
+    // Skip FILL and AGITATE to reach DRAIN (Step 2)
+    coordinator.advance_step(); // moves to Step 1 (AGITATE)
+    coordinator.advance_step(); // moves to Step 2 (DRAIN)
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::DRAIN);
+
+    // Tub becomes empty and bleed completes
+    ON_CALL(mock_water_sensor, is_empty()).WillByDefault(Return(true));
+    coordinator.update();
+
+    // Moving from DRAIN in Normal Wash into RINSE (FILL_MAIN) MUST turn off the pump!
+    EXPECT_CALL(mock_drain_pump, turn_off()).Times(1);
+
+    simulated_time_ms += 31000;
+    coordinator.update();
+
+    EXPECT_EQ(coordinator.get_current_stage(), domain::WashStage::RINSE);
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::FILL_MAIN);
+}

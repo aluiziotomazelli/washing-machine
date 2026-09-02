@@ -15,21 +15,29 @@ DrainController::DrainController(
 {
 }
 
-void DrainController::start(uint32_t bleed_duration_ms)
+void DrainController::start(uint32_t bleed_duration_ms, uint32_t already_empty_duration_ms)
 {
-    bleed_duration_ms_ = bleed_duration_ms;
     start_time_ms_ = timer_hal_.get_time_ms();
-    bleed_start_ms_ = 0;
+    bleed_start_ms_ = start_time_ms_;
     drain_elapsed_before_pause_ms_ = 0;
     bleed_elapsed_before_pause_ms_ = 0;
 
-    bleeding_phase_ = false;
     is_active_ = true;
     is_paused_ = false;
     is_finished_ = false;
     has_error_ = false;
 
-    drain_pump_.turn_on();
+    if (water_sensor_.is_empty()) {
+        bleeding_phase_ = true;
+        bleed_duration_ms_ = already_empty_duration_ms;
+    } else {
+        bleeding_phase_ = false;
+        bleed_duration_ms_ = bleed_duration_ms;
+    }
+
+    if (bleed_duration_ms_ > 0 || !bleeding_phase_) {
+        drain_pump_.turn_on();
+    }
 }
 
 void DrainController::update()
@@ -53,12 +61,15 @@ void DrainController::update()
                 return;
             }
         }
-    } else {
+    }
+
+    if (bleeding_phase_) {
         // Bleeding phase: pump remaining water until bleed duration expires
         uint32_t total_bleed_elapsed = bleed_elapsed_before_pause_ms_ + (now - bleed_start_ms_);
         if (total_bleed_elapsed >= bleed_duration_ms_) {
-            stop();
+            is_active_ = false;
             is_finished_ = true;
+            // Note: Does NOT call stop() or turn_off() here to allow smooth handover
         }
     }
 }

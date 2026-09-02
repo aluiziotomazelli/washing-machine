@@ -94,7 +94,6 @@ void WashCycleCoordinator::advance_step()
         return;
     }
 
-    stop_active_process();
     state_ = MachineState::RUNNING;
     step_index_++;
     plan_next_step();
@@ -202,9 +201,43 @@ void WashCycleCoordinator::update()
     }
 }
 
+void WashCycleCoordinator::exit_step(CycleStep from, CycleStep to)
+{
+    switch (from) {
+    case CycleStep::FILL_MAIN:
+    case CycleStep::FILL_SOFTENER:
+        fill_ctrl_.stop();
+        break;
+
+    case CycleStep::AGITATE_GENTLE:
+    case CycleStep::AGITATE_NORMAL:
+        agitator_.stop();
+        break;
+
+    case CycleStep::SOAK:
+        is_soaking_ = false;
+        break;
+
+    case CycleStep::DRAIN:
+        // Keep drain pump running if transitioning directly into spin (smooth handover)
+        if (to != CycleStep::SPIN_INTERMEDIATE && to != CycleStep::SPIN_FINAL) {
+            drain_ctrl_.stop();
+        }
+        break;
+
+    case CycleStep::SPIN_INTERMEDIATE:
+    case CycleStep::SPIN_FINAL:
+        spin_ctrl_.stop();
+        break;
+
+    default:
+        break;
+    }
+}
+
 void WashCycleCoordinator::execute_step(CycleStep step)
 {
-    stop_active_process();
+    exit_step(current_step_, step);
     current_step_ = step;
     step_start_ms_ = timer_hal_.get_time_ms();
 

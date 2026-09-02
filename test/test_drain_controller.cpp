@@ -68,10 +68,13 @@ TEST_F(DrainControllerTest, EntersBleedingPhaseWhenSensorDetectsEmptyTub)
 
     // Bleed finishes at 5000ms (3000ms after empty detected)
     simulated_time_ms = 5000;
-    EXPECT_CALL(mock_drain_pump, turn_off()).Times(1);
     drain_ctrl.update();
     EXPECT_TRUE(drain_ctrl.is_finished());
     EXPECT_FALSE(drain_ctrl.is_active());
+
+    // Pump remains on for smooth handover until stop() is called:
+    EXPECT_CALL(mock_drain_pump, turn_off()).Times(1);
+    drain_ctrl.stop();
 }
 
 TEST_F(DrainControllerTest, TriggersErrorIfTubNeverEmptiesBeforeTimeout)
@@ -144,7 +147,43 @@ TEST_F(DrainControllerTest, PausesAndResumesDuringDrainingAndBleeding)
     EXPECT_FALSE(drain_ctrl.is_finished());
 
     simulated_time_ms = 27000; // 2s more (3s total bleed) -> finishes!
-    EXPECT_CALL(mock_drain_pump, turn_off()).Times(1);
     drain_ctrl.update();
     EXPECT_TRUE(drain_ctrl.is_finished());
+
+    EXPECT_CALL(mock_drain_pump, turn_off()).Times(1);
+    drain_ctrl.stop();
+}
+
+TEST_F(DrainControllerTest, AlreadyEmptyWithZeroBleedFinishesImmediatelyWithoutTurningPumpOn)
+{
+    ON_CALL(mock_water_sensor, is_empty()).WillByDefault(Return(true));
+    EXPECT_CALL(mock_drain_pump, turn_on()).Times(0);
+
+    drain_ctrl.start(30000, 0);
+    EXPECT_TRUE(drain_ctrl.is_active());
+    EXPECT_TRUE(drain_ctrl.is_bleeding());
+
+    // First update finishes immediately
+    drain_ctrl.update();
+    EXPECT_TRUE(drain_ctrl.is_finished());
+    EXPECT_FALSE(drain_ctrl.is_active());
+}
+
+TEST_F(DrainControllerTest, AlreadyEmptyWithNonZeroBleedPumpsForSpecifiedDuration)
+{
+    ON_CALL(mock_water_sensor, is_empty()).WillByDefault(Return(true));
+    EXPECT_CALL(mock_drain_pump, turn_on()).Times(1);
+
+    drain_ctrl.start(30000, 5000); // 5s bleed when already empty
+    EXPECT_TRUE(drain_ctrl.is_active());
+    EXPECT_TRUE(drain_ctrl.is_bleeding());
+
+    simulated_time_ms = 4999;
+    drain_ctrl.update();
+    EXPECT_FALSE(drain_ctrl.is_finished());
+
+    simulated_time_ms = 5000;
+    drain_ctrl.update();
+    EXPECT_TRUE(drain_ctrl.is_finished());
+    EXPECT_FALSE(drain_ctrl.is_active());
 }

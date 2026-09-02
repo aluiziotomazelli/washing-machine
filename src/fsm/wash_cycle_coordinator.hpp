@@ -100,6 +100,7 @@ public:
 private:
     void plan_next_step();
     void execute_step(CycleStep step);
+    void exit_step(CycleStep from, CycleStep to);
     void stop_active_process();
     void trigger_error(MachineError error);
 
