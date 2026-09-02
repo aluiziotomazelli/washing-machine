@@ -204,7 +204,7 @@ The physical electromechanical pressure switch features mixed contact topologies
 The appliance uses a passive piezoelectric transducer without an internal oscillator. [`ui::Buzzer`](../src/ui/buzzer.hpp) utilizes non-blocking 3000 Hz hardware tone generation (`play_tone` / `stop_tone`) to produce acoustic cues:
 - `SHORT_BEEP` (50 ms button click feedback)
 - `DOUBLE_BEEP` (function toggle)
-- `CYCLE_FINISHED` (4-beep completion tune)
+- `CYCLE_FINISHED` (4 loud, repetitive finish beeps to alert from afar)
 - `ERROR_ALARM` (continuous alternating alarm)
 
 ### 5. Decoupled Visual Feedback: `ILedPanel` & `DiscreteLedPanel`
@@ -373,7 +373,7 @@ void loop() {
 
 ## Chapter 7: The WS2812B Addressable LED Engine, Hardware Re-spin & The AVR Interrupt Collision Dilemma
 
-With the discrete LED release (`v0.3.1`) validated and archived, the physical control panel ("casinha" wooden chassis) presented a compelling mechanical and visual opportunity: replacing the complex harness of 7 discrete through-hole LEDs with a single, compact **9-pixel WS2812B addressable RGB strip**.
+With the discrete LED release (`v0.3.1`) validated and archived, the physical control panel (wooden box) presented a compelling mechanical and visual opportunity: replacing the complex harness of 7 discrete through-hole LEDs with a single, compact **9-pixel WS2812B addressable RGB strip**.
 
 This upgrade introduced fascinating embedded challenges spanning cycle-accurate AVR assembly, real-world analog voltage levels, and timer interrupt collisions.
 
@@ -406,7 +406,7 @@ We engineered a bespoke, zero-heap hardware driver [`Ws2812Strip`](../src/hal/ws
 Thanks to the interface inversion introduced in Chapter 6 ([`ILedPanel`](../src/ui/interfaces/i_led_panel.hpp)), migrating the machine from discrete LEDs to the RGB strip required **zero modifications** to `PanelController` or domain logic.
 
 The [`StripLedPanel`](../src/ui/strip_led_panel.hpp) implements:
-- **Dual-Tone Modern Aesthetic:** Water levels glow exclusively in Cyan (`0, 220, 255`), wash stages in Pure White (`255, 255, 255`), and the softener indicator in a soft, desaturated pastel rose (`255, 100, 140`).
+- **Dual-Tone Modern Aesthetic:** Water levels glow exclusively in Cyan (`0, 220, 255`), wash stages in Pure White (`255, 255, 255`), and the softener indicator in a pastel rose (`255, 100, 140`).
 - **Smooth "Breathing" Animation (2-second Period):** The active running stage oscillates smoothly in brightness, future stages maintain a faint 15% standby glow, finished stages extinguish, and paused states pulse synchronously.
 - **Integer-Only Wave Math:** Rather than importing heavy floating-point `sin()` math (which consumes ~1.5 KB of AVR Flash), the breathing animation employs integer-only symmetrical triangle wave math:
   ```cpp
@@ -467,7 +467,7 @@ void PanelController::update()
     }
     ...
 ```
-- While a 50 ms button beep or multi-tone finish melody is playing, frame transmission is paused.
+- While a 50 ms button click beep or repeated loud finish beeps are sounding, frame transmission is paused.
 - The human eye cannot perceive a 50 ms pause in a slow 2-second breathing wave, but the human ear instantly perceives the pristine, pure 3000 Hz tone.
 - In addition, the strip frame rate was throttled to **30 FPS** (`frame_interval_ms = 33`), reducing the total CPU duty cycle consumed by the WS2812 engine to under **0.8%**!
 
@@ -483,7 +483,7 @@ To match the behavior of modern domestic appliances:
 
 ### 6. Milestone Metrics & Readiness
 
-| Metric | Legacy v0.1.0 | FSM v0.3.1 (Discrete) | Strip v0.3.5 (WS2812) |
+| Metric | Legacy v0.1.0 | FSM v0.3.1 (Discrete) | Strip v0.4.0 (WS2812) |
 | :--- | :--- | :--- | :--- |
 | **Flash ROM** | 7,130 B (23%) | 14,976 B (48%) | **15,822 B (51%)** |
 | **Static SRAM** | 358 B (17%) | 721 B (35%) | **821 B (40%)** |
