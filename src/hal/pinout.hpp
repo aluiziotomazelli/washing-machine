@@ -7,10 +7,10 @@ namespace config {
 // -----------------------------------------------------------------------------
 // UI Input Pins (Pushbuttons with internal pull-up)
 // -----------------------------------------------------------------------------
-constexpr uint8_t k_btn_softener_pin = 13; // D13 / Softener toggle button
-constexpr uint8_t k_btn_level_pin    = 14; // A0 (Pin 14) / Water level cycle button
-constexpr uint8_t k_btn_start_pin    = 15; // A1 (Pin 15) / Start-Pause button
-constexpr uint8_t k_btn_program_pin  = 16; // A2 (Pin 16) / Wash program cycle button
+constexpr uint8_t k_btn_softener_pin = 7; // D7 / Softener toggle button
+constexpr uint8_t k_btn_level_pin = 14;   // A0 (Pin 14) / Water level cycle button
+constexpr uint8_t k_btn_start_pin = 15;   // A1 (Pin 15) / Start-Pause button
+constexpr uint8_t k_btn_program_pin = 16; // A2 (Pin 16) / Wash program cycle button
 
 // -----------------------------------------------------------------------------
 // Sensor Input Pins (Pressure Switch)

@@ -281,3 +281,34 @@ TEST_F(PanelControllerTest, SyncsErrorStateAndPlaysAlarm)
 
     panel_ctrl.update();
 }
+
+TEST_F(PanelControllerTest, ButtonClickInFinishedStateWakesUpToIdle)
+{
+    panel_ctrl.init();
+
+    // Start and advance to FINISHED
+    EXPECT_CALL(btn_start, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+    panel_ctrl.update();
+
+    coordinator.advance_step();
+    coordinator.advance_step();
+    coordinator.advance_step();
+    coordinator.advance_step();
+    panel_ctrl.update();
+    EXPECT_EQ(coordinator.get_state(), MachineState::FINISHED);
+
+    // Clicking Water Level button while in FINISHED:
+    // Should transition coordinator to IDLE, update machine state, set level, and beep!
+    EXPECT_CALL(led_panel, set_machine_state(MachineState::IDLE, MachineError::NONE)).Times(AtLeast(1));
+    EXPECT_CALL(led_panel, set_selected_level(WaterLevel::MEDIUM_LEVEL)).Times(1);
+    EXPECT_CALL(buzzer, beep(50)).Times(1);
+
+    EXPECT_CALL(btn_level, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+
+    panel_ctrl.update();
+    EXPECT_EQ(coordinator.get_state(), MachineState::IDLE);
+}
