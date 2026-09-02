@@ -24,8 +24,9 @@ public:
     /**
      * @brief Start tub drainage.
      * @param bleed_duration_ms Additional pumping time after tub is detected empty (default 30s).
+     * @param already_empty_duration_ms Pumping time if tub is already empty at start (default 0s).
      */
-    void start(uint32_t bleed_duration_ms = 30000);
+    void start(uint32_t bleed_duration_ms = 30000, uint32_t already_empty_duration_ms = 0);
 
     void update();
     void pause();
