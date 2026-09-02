@@ -37,16 +37,16 @@ class StripLedPanel : public ILedPanel {
 public:
     static constexpr uint8_t k_pixel_count = 9;
 
-    // Pixel indices
-    static constexpr uint8_t k_idx_softener   = 0;
-    static constexpr uint8_t k_idx_gap1       = 1;
-    static constexpr uint8_t k_idx_lvl_low    = 2;
-    static constexpr uint8_t k_idx_lvl_med    = 3;
+    // Pixel indices (Inverted strip orientation: P0 at the right, P8 at the left)
+    static constexpr uint8_t k_idx_spin       = 0;
+    static constexpr uint8_t k_idx_rinse      = 1;
+    static constexpr uint8_t k_idx_wash       = 2;
+    static constexpr uint8_t k_idx_heavy_wash = 3;
     static constexpr uint8_t k_idx_lvl_high   = 4;
-    static constexpr uint8_t k_idx_heavy_wash = 5;
-    static constexpr uint8_t k_idx_wash       = 6;
-    static constexpr uint8_t k_idx_rinse      = 7;
-    static constexpr uint8_t k_idx_spin       = 8;
+    static constexpr uint8_t k_idx_lvl_med    = 5;
+    static constexpr uint8_t k_idx_lvl_low    = 6;
+    static constexpr uint8_t k_idx_gap1       = 7;
+    static constexpr uint8_t k_idx_softener   = 8;
 
     // Color definitions
     static constexpr hal::RgbColor k_color_pink{255, 20, 140};
