@@ -23,7 +23,16 @@ static hal::ArduinoGpioHAL gpio_hal;
 static hal::ArduinoTimerHAL timer_hal;
 
 // UI Hardware Components:
-static ui::ButtonConfig btn_cfg{true, true, 20, 20, 300, 1000, 1500, 6000};
+static ui::ButtonConfig btn_cfg{
+    true, // active_low
+    true, // enable_internal_pull
+    20,   // debounce_press_ms
+    20,   // debounce_release_ms
+    100,  // double_click_ms
+    800,  // long_click_ms
+    1600, // very_long_click_ms
+    6000  // timeout_ms
+};
 
 static ui::Button btn_start(gpio_hal, timer_hal, config::k_btn_start_pin, btn_cfg);
 static ui::Button btn_program(gpio_hal, timer_hal, config::k_btn_program_pin, btn_cfg);

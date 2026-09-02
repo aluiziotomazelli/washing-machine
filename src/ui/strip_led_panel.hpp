@@ -68,7 +68,7 @@ public:
     static constexpr uint8_t k_idx_softener   = 8;
 
     // Color definitions
-    static constexpr hal::RgbColor k_color_pink{255, 20, 140};
+    static constexpr hal::RgbColor k_color_pink{255, 100, 140}; // Soft pastel rose (less saturated)
     static constexpr hal::RgbColor k_color_cyan{0, 220, 255};
     static constexpr hal::RgbColor k_color_white{255, 255, 255};
     static constexpr hal::RgbColor k_color_red{255, 0, 0};
