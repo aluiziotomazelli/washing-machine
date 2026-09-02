@@ -3,6 +3,7 @@
 #include "src/hal/pinout.hpp"
 #include "src/hal/arduino/arduino_gpio_hal.hpp"
 #include "src/hal/arduino/arduino_timer_hal.hpp"
+#include "src/hal/arduino/arduino_watchdog_hal.hpp"
 #include "src/hal/digital_output.hpp"
 #include "src/hal/reversible_motor.hpp"
 #include "src/hal/pressure_switch_sensor.hpp"
@@ -21,6 +22,7 @@
 // Hardware Abstraction Layer instances:
 static hal::ArduinoGpioHAL gpio_hal;
 static hal::ArduinoTimerHAL timer_hal;
+static hal::ArduinoWatchdogHAL watchdog_hal;
 
 // UI Hardware Components:
 static ui::ButtonConfig btn_cfg{
@@ -71,6 +73,9 @@ static ui::PanelController panel_ctrl(btn_start, btn_program, btn_level, btn_sof
 
 void setup()
 {
+    // Check if recovery from hardware watchdog reset occurred
+    bool recovered_from_wdt = watchdog_hal.was_reset_by_watchdog();
+
     // Initialize Hardware Peripherals
     btn_start.init();
     btn_program.init();
@@ -84,9 +89,17 @@ void setup()
     hal::DigitalOutput::init_all();
     motor.init();
 
+    // Arm Hardware Watchdog (2-second timeout protection against MCU freeze)
+    watchdog_hal.enable(hal::WatchdogTimeout::TIMEOUT_2S);
+
     // Initialize Coordinator & UI Panel Presentation
     coordinator.init();
     panel_ctrl.init();
+
+    // Audible alert if reboot was caused by Watchdog freeze recovery
+    if (recovered_from_wdt) {
+        buzzer.play_pattern(ui::BuzzerPattern::DOUBLE_BEEP);
+    }
 }
 
 void loop()
@@ -98,4 +111,7 @@ void loop()
     // Process & UI coordination
     coordinator.update();
     panel_ctrl.update();
+
+    // Pet / kick hardware watchdog to prevent timeout reset
+    watchdog_hal.kick();
 }
