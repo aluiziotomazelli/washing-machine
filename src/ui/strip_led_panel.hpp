@@ -16,6 +16,25 @@ struct StripLedConfig {
     uint16_t breathe_period_ms{2000};  // Period of smooth breathing animation in RUNNING (2s)
     uint16_t blink_interval_ms{500};   // Period of strobe in PAUSED and ERROR (500ms)
     uint8_t frame_interval_ms{33};     // Frame throttle interval (33ms -> ~30 FPS)
+
+    constexpr StripLedConfig() = default;
+
+    constexpr StripLedConfig(
+        uint8_t max_b,
+        uint8_t idle_b = 60,
+        uint8_t future_b = 15,
+        uint16_t breathe_ms = 2000,
+        uint16_t blink_ms = 500,
+        uint8_t frame_ms = 33
+    )
+        : max_brightness(max_b)
+        , idle_brightness(idle_b)
+        , future_brightness(future_b)
+        , breathe_period_ms(breathe_ms)
+        , blink_interval_ms(blink_ms)
+        , frame_interval_ms(frame_ms)
+    {
+    }
 };
 
 /**
