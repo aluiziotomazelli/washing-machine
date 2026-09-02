@@ -37,7 +37,9 @@ The project's architectural evolution is structured into milestones with dedicat
 | **`v0.2.0`** | **HAL & Host Unit Testing (Linux/PC)** | Pure C++ interfaces (`IGpioHAL`, `ITimerHAL`, `IButton`, `IDigitalOutput`, `IReversibleMotor`, `IWaterLevelSensor`, `IBuzzer`, `ILedPanel`), safety interlocks (motor dead-time), and automated Dual-Target Unit Testing (GoogleTest & GoogleMock on PC with CI). |
 | **`v0.3.0`** | **Non-Blocking Finite State Machine** | Event-driven washing machine cycle coordinator powered by non-blocking ticks, eliminating all `delay()` and blocking loops. |
 | **`v0.3.1`** | **Production Baseline (Discrete LEDs)** | Production-ready firmware for discrete LEDs meeting full legacy feature equivalence with binaries attached. |
+| **`v0.3.2`** | **Maintenance Patch (Discrete LEDs)** | Backport of smooth drain-to-spin pump handover (eliminating relay chatter) and empty-tub spin optimization for discrete LED builds. |
 | **`v0.4.0`** | **Addressable WS2812B LED Engine & Hardware Re-spin** | Bespoke zero-heap 16 MHz AVR assembly driver (27-byte buffer), non-blocking breathing animations, 7-conductor ribbon cabling, I2C bus liberation (A4/A5), buzzer interrupt collision resolution, standby sleep mode, and 100 automated unit tests. |
+| **`v0.4.1`** | **Drain Handover & Empty Spin Optimization** | Replaced monolithic blanket resets with formal `exit_step(from, to)` FSM transitions, eliminating relay chatter during drain-to-spin handover, plus empty-tub drain optimization for hand-wash spin cycles. 104 host unit tests. |
 | **`v0.5.0`** | **I2C Out-of-Balance Sensing & Safety Watchdogs** | Real-time vibration sensing during spin acceleration via liberated I2C bus (A4/A5), automatic unbalance detection and pause, and hardware AVR watchdogs. |
 | **`v1.0.0`** | **Production Modern C++ & Portability** | Robust, fully documented, clean C++ firmware ready for deployment (including ESP32-C3 portability). |
 
