@@ -19,12 +19,20 @@ protected:
     uint32_t simulated_time_ms{0};
 
     // Fast timings for unit tests:
+    static constexpr controllers::SprintStep test_sprints[] = {
+        { 4000, 3500 },
+        { 5000, 3500 },
+        { 6000, 4000 },
+        { 7000, 3000 }
+    };
+
     controllers::SpinConfig config{
         1000, // 1s clutch engage
-        500,  // 500ms sprint pause
         1000, // 1s duty on
         1000, // 1s duty off
-        2000  // 2s coast down
+        2000, // 2s coast down
+        test_sprints,
+        4
     };
 
     controllers::SpinController spin_ctrl{
@@ -41,15 +49,17 @@ protected:
             return simulated_time_ms;
         }));
     }
-    void step_through_low_level_sprints()
+    void step_through_sprints()
     {
-        simulated_time_ms += 1000; spin_ctrl.update(); // Clutch
-        simulated_time_ms += 4000; spin_ctrl.update(); // Sprint 1 on
-        simulated_time_ms += 500;  spin_ctrl.update(); // Sprint 1 off
-        simulated_time_ms += 3000; spin_ctrl.update(); // Sprint 2 on
-        simulated_time_ms += 500;  spin_ctrl.update(); // Sprint 2 off
-        simulated_time_ms += 2000; spin_ctrl.update(); // Sprint 3 on
-        simulated_time_ms += 500;  spin_ctrl.update(); // Sprint 3 off -> Duty Run!
+        simulated_time_ms += 1000; spin_ctrl.update(); // Clutch (1000ms in test config)
+        simulated_time_ms += 4000; spin_ctrl.update(); // Sprint 1 on (4000ms)
+        simulated_time_ms += 3500; spin_ctrl.update(); // Sprint 1 off (3500ms)
+        simulated_time_ms += 5000; spin_ctrl.update(); // Sprint 2 on (5000ms)
+        simulated_time_ms += 3500; spin_ctrl.update(); // Sprint 2 off (3500ms)
+        simulated_time_ms += 6000; spin_ctrl.update(); // Sprint 3 on (6000ms)
+        simulated_time_ms += 4000; spin_ctrl.update(); // Sprint 3 off (4000ms)
+        simulated_time_ms += 7000; spin_ctrl.update(); // Sprint 4 on (7000ms)
+        simulated_time_ms += 3000; spin_ctrl.update(); // Sprint 4 off (3000ms) -> Duty Run!
     }
 };
 
@@ -79,13 +89,13 @@ TEST_F(SpinControllerTest, TransitionsFromClutchToFirstSprintAfterDelay)
     EXPECT_EQ(spin_ctrl.get_sub_phase(), controllers::SpinSubPhase::SPRINT_ON);
 }
 
-TEST_F(SpinControllerTest, LowLevelExecutesThreeSprintsAndTransitionsToDutyRun)
+TEST_F(SpinControllerTest, ExecutesFourProgressiveSprintsAndTransitionsToDutyRun)
 {
     EXPECT_CALL(mock_motor, rotate_clockwise()).Times(AtLeast(1));
     EXPECT_CALL(mock_motor, stop()).Times(AtLeast(1));
 
     spin_ctrl.start(domain::WaterLevel::LOW_LEVEL, 60);
-    step_through_low_level_sprints();
+    step_through_sprints();
     EXPECT_EQ(spin_ctrl.get_sub_phase(), controllers::SpinSubPhase::DUTY_RUN_ON);
 }
 
@@ -96,7 +106,7 @@ TEST_F(SpinControllerTest, DutyRunAlternatesOnAndOffAndEntersCoastDown)
 
     // Start with 2s duty run duration
     spin_ctrl.start(domain::WaterLevel::LOW_LEVEL, 2);
-    step_through_low_level_sprints();
+    step_through_sprints();
     EXPECT_EQ(spin_ctrl.get_sub_phase(), controllers::SpinSubPhase::DUTY_RUN_ON);
 
     // 1s Duty On
@@ -123,7 +133,7 @@ TEST_F(SpinControllerTest, PauseDuringSpinKeepsPumpOnUntilCoastDownCompletes)
     EXPECT_CALL(mock_motor, stop()).Times(AtLeast(1));
 
     spin_ctrl.start(domain::WaterLevel::LOW_LEVEL, 60);
-    step_through_low_level_sprints();
+    step_through_sprints();
     EXPECT_EQ(spin_ctrl.get_sub_phase(), controllers::SpinSubPhase::DUTY_RUN_ON);
 
     // Pause while spinning
@@ -155,7 +165,7 @@ TEST_F(SpinControllerTest, StopDuringSpinKeepsPumpOnUntilCoastDownCompletes)
     EXPECT_CALL(mock_motor, stop()).Times(AtLeast(1));
 
     spin_ctrl.start(domain::WaterLevel::LOW_LEVEL, 60);
-    step_through_low_level_sprints();
+    step_through_sprints();
 
     // Soft stop
     spin_ctrl.stop();
@@ -174,7 +184,7 @@ TEST_F(SpinControllerTest, EmergencyStopCutsBothImmediately)
     EXPECT_CALL(mock_motor, stop()).Times(AtLeast(1));
 
     spin_ctrl.start(domain::WaterLevel::LOW_LEVEL, 60);
-    step_through_low_level_sprints();
+    step_through_sprints();
 
     EXPECT_CALL(mock_drain_pump, turn_off()).Times(1);
     spin_ctrl.emergency_stop();

@@ -21,7 +21,7 @@ def main():
     parser = argparse.ArgumentParser(description="Record MPU-6050 telemetry to a CSV file.")
     parser.add_argument("-p", "--port", default=DEFAULT_PORT, help=f"Serial port (default: {DEFAULT_PORT})")
     parser.add_argument("-b", "--baud", type=int, default=115200, help="Baud rate (default: 115200)")
-    parser.add_argument("-d", "--duration", type=float, default=50.0, help="Recording duration in seconds (default: 50s)")
+    parser.add_argument("-d", "--duration", type=float, default=60.0, help="Recording duration in seconds (default: 60s)")
     parser.add_argument("-o", "--output", default=None, help="Path to output CSV file")
     args = parser.parse_args()
 

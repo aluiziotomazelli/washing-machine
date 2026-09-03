@@ -20,17 +20,14 @@ void SpinController::start(domain::WaterLevel level, uint32_t duration_sec)
     level_ = level;
     duty_run_duration_ms_ = duration_sec * 1000;
 
-    // Configure sprints based on water level (clothing volume)
     current_sprint_idx_ = 0;
-    if (level_ == domain::WaterLevel::LOW_LEVEL) {
-        total_sprints_ = 3;
-        current_sprint_on_ms_ = 4000;
-    } else if (level_ == domain::WaterLevel::MEDIUM_LEVEL) {
-        total_sprints_ = 5;
-        current_sprint_on_ms_ = 6000;
+    total_sprints_ = config_.sprint_count;
+    if (config_.sprints && total_sprints_ > 0) {
+        current_sprint_on_ms_ = config_.sprints[0].on_ms;
+        current_sprint_off_ms_ = config_.sprints[0].off_ms;
     } else {
-        total_sprints_ = 6;
-        current_sprint_on_ms_ = 7000;
+        current_sprint_on_ms_ = 0;
+        current_sprint_off_ms_ = 0;
     }
 
     is_active_ = true;
@@ -77,16 +74,14 @@ void SpinController::update()
         break;
 
     case SpinSubPhase::SPRINT_OFF:
-        if (elapsed_in_phase >= config_.sprint_pause_ms) {
+        if (elapsed_in_phase >= current_sprint_off_ms_) {
             current_sprint_idx_++;
             if (current_sprint_idx_ >= total_sprints_) {
                 // All sprints completed -> enter duty run regime
                 transition_to_duty_run();
             } else {
-                // Next sprint with decreasing pulse down to 2000 ms
-                if (current_sprint_on_ms_ > 2000) {
-                    current_sprint_on_ms_ -= 1000;
-                }
+                current_sprint_on_ms_ = config_.sprints[current_sprint_idx_].on_ms;
+                current_sprint_off_ms_ = config_.sprints[current_sprint_idx_].off_ms;
                 sub_phase_ = SpinSubPhase::SPRINT_ON;
                 phase_start_ms_ = now;
                 motor_.rotate_clockwise();

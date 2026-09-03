@@ -58,29 +58,52 @@ This metric offers specific mathematical properties for this application:
 
 ## Empirical test runs
 
-Five full spin test runs of 100 seconds each were executed on the actual washing machine to collect baseline and fault data. Telemetry was logged to CSV files in the `logs/` directory.
+Ten test runs were conducted on the actual machine to evaluate suspension dynamics across different acceleration profiles and load conditions. All telemetry was captured at 50 Hz and logged to the `logs/` directory.
 
-| Test run | Log file | Water level configuration | Basket load condition | Overall average Vib | Peak Vib | Cruising average (60s to 90s) | Cruising peak | Physical behavior observed |
-| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :--- |
-| 1 | `test1_empty_tub_low_level.csv` | Low (3 sprints) | Empty basket | 1967 | 5526 | 3020 | 3913 | Quiet, steady, no cabinet movement |
-| 2 | `test2_empty_tub_medium_level.csv` | Medium (5 sprints) | Empty basket | 2132 | 4710 | 3318 | 4555 | Quiet, steady, no cabinet movement |
-| 3 | `test3_unbalanced_light_blanket_medium_level.csv` | Medium (5 sprints) | Light dry blanket (one side) | 4688 | 12840 | 5160 | 7558 | Strong cabinet shake, nearly walked at 50.3s |
-| 4 | `test4_unbalanced_light_blanket_low_level.csv` | Low (3 sprints) | Light dry blanket (one side) | 3269 | 10006 | 5568 | 8294 | Strong cabinet shake, nearly walked at 51.1s |
-| 5 | `test5_unbalanced_heavy_blanket_medium_level.csv` | Medium (5 sprints) | Heavy folded blanket (one side) | 5367 | 15417 | 8450 | 15417 | Cabinet walked slightly on floor at 64.2s |
+### Baseline evaluation with legacy decreasing ramp
+
+The original firmware used decreasing sprint pulses (6s down to 2s, with fixed pauses).
+
+| Run | Log file | Level | Load condition | Avg Vib | Peak Vib | Cruise Avg | Behavior observed |
+| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :--- |
+| 1 | `test1_empty_tub_low_level.csv` | Low (3 sprints) | Empty basket | 1967 | 5526 | 3020 | Quiet, steady, no cabinet movement |
+| 2 | `test2_empty_tub_medium_level.csv` | Medium (5 sprints) | Empty basket | 2132 | 4710 | 3318 | Quiet, steady, no cabinet movement |
+| 3 | `test3_unbalanced_light_blanket_medium_level.csv` | Medium (5 sprints) | Light dry blanket (one side) | 4688 | 12840 | 5160 | Heavy cabinet shake, nearly walked at 50.3s |
+| 4 | `test4_unbalanced_light_blanket_low_level.csv` | Low (3 sprints) | Light dry blanket (one side) | 3269 | 10006 | 5568 | Heavy cabinet shake, nearly walked at 51.1s |
+| 5 | `test5_unbalanced_heavy_blanket_medium_level.csv` | Medium (5 sprints) | Heavy folded blanket (one side) | 5367 | 15417 | 8450 | Cabinet walked on floor at 64.2s |
+
+### Progressive acceleration ramp optimization
+
+To eliminate resonance spikes and water drag, the sprint profile was updated to progressive increasing pulses with tailored motor pause intervals.
+
+| Run | Log file | Sprint schedule (ON / OFF) | Load condition | Avg Vib | Peak Vib | Cruise Avg | Behavior observed |
+| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :--- |
+| 6 | `test6_new_sprint_unbalanced_light_blanket.csv` | 5s/5s, 7s/5s, 9s/5s, 11s/5s | Light dry blanket (one side) | 1326 | 4468 | 1836 | Calm and smooth, but 11s ON felt excessively long |
+| 7 | `test7_shorter_sprint_unbalanced_light_blanket.csv` | 3s/5s, 5s/5s, 7s/5s, 9s/5s | Light dry blanket (one side) | 1805 | 5044 | 3201 | 3s ON let tub stop completely, 9s ON ran into resonance |
+| 8 | `test8_tailored_sprint_steps_unbalanced_light_blanket.csv` | 4s/3.5s, 5.5s/5s, 7s/4s, 8s/3s | Light dry blanket (one side) | 1003 | 5326 | 3331 | Initial inertia preserved, but S2 OFF lingered in resonance |
+| 9 | `test9_finetuned_sprint_steps_unbalanced_light_blanket.csv` | 4s/3.5s, 5s/3.5s, 6s/4s, 7s/3s | Light dry blanket (one side) | 1616 | 5005 | 3520 | Fully stable, no deceleration resonance, seamless cruise |
+| 10 | `test10_finetuned_sprint_empty_tub.csv` | 4s/3.5s, 5s/3.5s, 6s/4s, 7s/3s | Empty basket | 1366 | 3729 | 2255 | Peak dropped by 32.5% compared to run 1, very quiet |
 
 ## Experimental observations
 
-### Transient resonance vs steady-state cruising
+### Acceleration ramp optimization and fluid dynamics
 
-In all tests, the maximum peak vibration occurred during the motor acceleration ramp between 50s and 65s, rather than during steady-state top speed. Once the basket reached full speed (after 60s to 70s), gyroscopic stabilization reduced vibration by roughly 30% to 50% compared to the resonance peak.
+Pulsed spin cycles in top-load washing machines without tachometers serve two physical purposes:
 
-The acceleration profile had a direct effect on resonance amplitude:
-- In test 1 (low level, 3 sprints), the faster ramp caused an empty basket peak of 5526.
-- In test 2 (medium level, 5 sprints), the progressive stages reduced the peak to 4710, a 15% reduction in mechanical shock.
+1. Hydraulic drag prevention. Saturated clothes release several liters of water during initial drum rotation. A standard drain pump evacuates approximately 250 to 300 ml per second. Pauses between sprint pulses give the pump time to evacuate water from the outer tub before the next motor run, preventing the spinning basket from hitting pooled water and overloading the induction motor.
+2. Radial clothes distribution. Progressive pulses allow wet items to distribute evenly against the perforated drum wall under moderate centrifugal force before full operating speed is engaged.
+
+### Deceleration resonance
+
+Test runs 7 and 8 revealed that washing machine suspensions can enter resonance during the coast-down (OFF) intervals:
+
+- If an OFF pause is too long (such as 5.0 seconds in test 8 after sprint 2), the basket decelerates directly into the 200 to 250 RPM natural frequency band while freewheeling.
+- When the motor re-energizes while the basket is wobbling at its natural frequency, electrical torque vector misalignment produces a severe dynamic jolt.
+- Shortening the S2 pause from 5.0s to 3.5s in test 9 prevented the drum from dropping into the resonance band, allowing the motor to pick up the load while still smoothly rotating.
 
 ### Mechanics of cabinet walking
 
-Test 5 captured the transition from severe shaking to physical foot displacement at 64.2 seconds.
+Test 5 captured the transition from severe shaking to physical foot displacement at 64.2 seconds:
 
 ```
 62.2s: Vib = 11675
@@ -109,9 +132,20 @@ Isolated shock peaks occurred during sprint motor switching. For example, at 22.
 
 In contrast, the walking event at 62s to 65s sustained vibration above 11000 for over 3.0 continuous seconds before the feet broke friction. Cabinet walking requires continuous energy injection over several full rotation cycles to overcome suspension damping and chassis inertia.
 
+## Final calibrated sprint schedule
+
+The optimal sprint sequence established in test 9 and verified on empty basket in test 10 is configured in `SpinConfig`:
+
+| Step | Motor run (ON) | Pump pause (OFF) | Engineering rationale |
+| :---: | :---: | :---: | :--- |
+| S1 | 4.0s | 3.5s | Overcomes belt and seal static friction; seats laundry without stalling |
+| S2 | 5.0s | 3.5s | Extracts bulk water; re-engages before deceleration resonance can develop |
+| S3 | 6.0s | 4.0s | Accelerates dry basket; 4s pause damps transient tub sway |
+| S4 | 7.0s | 3.0s | Final velocity ramp; 3s pause delivers drum directly into cruising spin |
+
 ## Empirical threshold calibration
 
-Based on the five test runs, the vibration domain divides into four distinct operational zones:
+Based on all ten test runs, the vibration domain divides into four operational zones:
 
 | Vibration index (Vib) | Operational status | Mechanical meaning |
 | :--- | :--- | :--- |

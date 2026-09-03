@@ -45,7 +45,7 @@ protected:
     controllers::FillController fill_ctrl{mock_timer, mock_valve_main, mock_valve_softener, mock_water_sensor, 5000};
     controllers::Agitator agitator{mock_timer, mock_motor};
     controllers::DrainController drain_ctrl{mock_timer, mock_drain_pump, mock_water_sensor, 5000};
-    controllers::SpinConfig spin_config{100, 100, 100, 100, 200};
+    controllers::SpinConfig spin_config{100, 100, 100, 200};
     controllers::SpinController spin_ctrl{mock_timer, mock_drain_pump, mock_motor, spin_config};
 
     fsm::WashCycleCoordinator coordinator{
