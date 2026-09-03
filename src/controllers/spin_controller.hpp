@@ -5,6 +5,7 @@
 #include "../hal/interfaces/i_digital_output.hpp"
 #include "../hal/interfaces/i_reversible_motor.hpp"
 #include "../hal/interfaces/i_timer_hal.hpp"
+#include "interfaces/i_vibration_monitor.hpp"
 
 namespace controllers {
 
@@ -23,7 +24,8 @@ enum class SpinSubPhase : uint8_t
     COAST_DOWN,     // Normal completion drum spin-down before pump off
     PAUSE_COASTING, // Controlled deceleration during pause with pump on
     PAUSED,         // Drum fully stopped and pump off
-    STOP_COASTING   // Controlled deceleration during stop with pump on
+    STOP_COASTING,  // Controlled deceleration during stop with pump on
+    RETRY_COASTING  // Controlled deceleration after unbalance trip before re-attempting spin
 };
 
 /**
@@ -37,7 +39,7 @@ struct SprintStep
 };
 
 // Default progressive sprint profile tuned for top-load suspension dynamics
-inline constexpr SprintStep k_default_sprints[] = {
+constexpr SprintStep k_default_sprints[] = {
     { 4000, 3500 }, // S1: Initial pull & clothing distribution without dying
     { 5000, 3500 }, // S2: Water expulsion with short pause to prevent coasting resonance
     { 6000, 4000 }, // S3: Speed ramp & suspension stabilization
@@ -56,6 +58,7 @@ struct SpinConfig
     uint32_t coast_down_ms{10000};   // 10s drum coast-down before pump off
     const SprintStep* sprints{k_default_sprints};
     uint8_t sprint_count{sizeof(k_default_sprints) / sizeof(k_default_sprints[0])};
+    uint8_t max_unbalance_retries{2}; // Maximum dry redistribution retries before flagging error
 };
 
 /**
@@ -73,7 +76,8 @@ public:
         hal::ITimerHAL& timer_hal,
         hal::IDigitalOutput& drain_pump,
         hal::IReversibleMotor& motor,
-        const SpinConfig& config = SpinConfig{});
+        const SpinConfig& config = SpinConfig{},
+        IVibrationMonitor* vibration_monitor = nullptr);
 
     /**
      * @brief Start centrifugal spin cycle.
@@ -107,6 +111,8 @@ public:
     bool is_active() const { return is_active_; }
     bool is_paused() const { return is_paused_; }
     bool is_finished() const { return is_finished_; }
+    bool has_error() const { return has_error_; }
+    uint8_t get_unbalance_retries() const { return unbalance_retries_; }
     SpinSubPhase get_sub_phase() const { return sub_phase_; }
 
 private:
@@ -137,6 +143,9 @@ private:
     bool is_active_{false};
     bool is_paused_{false};
     bool is_finished_{false};
+    bool has_error_{false};
+    uint8_t unbalance_retries_{0};
+    IVibrationMonitor* vibration_monitor_{nullptr};
 };
 
 } // namespace controllers
