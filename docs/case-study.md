@@ -701,8 +701,8 @@ When an error condition does occur (`UNBALANCED_LOAD`, `FILL_TIMEOUT`, or `DRAIN
 
 | Metric | Legacy v0.1.0 | FSM v0.3.1 (Discrete) | Strip v0.4.0 (WS2812) | Safety & Sensing v0.5.0 |
 | :--- | :--- | :--- | :--- | :--- |
-| **Flash ROM** | 7,130 B (23%) | 14,976 B (48%) | 15,822 B (51%) | **21,594 B (70%)** |
-| **Static SRAM** | 358 B (17%) | 721 B (35%) | 821 B (40%) | **1,322 B (64%)** |
+| **Flash ROM** | 7,130 B (23%) | 14,976 B (48%) | 15,822 B (51%) | **22,120 B (72%)** |
+| **Static SRAM** | 358 B (17%) | 721 B (35%) | 821 B (40%) | **1,383 B (67%)** |
 | **Dynamic Heap** | 0 B | 0 B | 0 B | **0 B (Zero Heap)** |
 | **Automated Tests** | 0 tests | 80 tests | 100 tests | **138 tests (100% pass, 34 ms)** |
 | **Watchdog Protection** | None | None | None | **Hardware AVR WDT (.init3 hook)** |

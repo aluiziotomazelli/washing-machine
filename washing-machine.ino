@@ -16,6 +16,7 @@
 #include "src/controllers/agitator.hpp"
 #include "src/controllers/drain_controller.hpp"
 #include "src/controllers/spin_controller.hpp"
+#include "src/controllers/vibration_monitor.hpp"
 #include "src/fsm/wash_cycle_coordinator.hpp"
 #include "src/ui/panel_controller.hpp"
 #include "src/hal/arduino/arduino_i2c_hal.hpp"
@@ -27,8 +28,9 @@ static hal::ArduinoTimerHAL timer_hal;
 static hal::ArduinoWatchdogHAL watchdog_hal;
 static hal::ArduinoI2cHAL i2c_hal;
 
-// Accelerometer Sensor:
+// Accelerometer Sensor & Vibration Monitor:
 static hal::Mpu6050 accel_sensor(i2c_hal);
+static controllers::VibrationMonitor vib_monitor(accel_sensor, timer_hal);
 
 // UI Hardware Components:
 static ui::ButtonConfig btn_cfg{
@@ -69,7 +71,7 @@ static hal::ReversibleMotor motor(gpio_hal, timer_hal, config::k_motor_cw_pin, c
 static controllers::FillController fill_ctrl(timer_hal, valve_main, valve_softener, water_level_sensor);
 static controllers::Agitator agitator(timer_hal, motor);
 static controllers::DrainController drain_ctrl(timer_hal, drain_pump, water_level_sensor);
-static controllers::SpinController spin_ctrl(timer_hal, drain_pump, motor);
+static controllers::SpinController spin_ctrl(timer_hal, drain_pump, motor, controllers::SpinConfig{}, &vib_monitor);
 
 // Central Cycle Coordinator (FSM):
 static fsm::WashCycleCoordinator coordinator(timer_hal, fill_ctrl, agitator, drain_ctrl, spin_ctrl);
@@ -98,8 +100,9 @@ void setup()
     hal::DigitalOutput::init_all();
     motor.init();
 
-    // Initialize MPU-6050 Accelerometer
+    // Initialize MPU-6050 Accelerometer & Vibration Monitor
     accel_sensor.init();
+    vib_monitor.init();
 
     // Arm Hardware Watchdog (2-second timeout protection against MCU freeze)
     watchdog_hal.enable(hal::WatchdogTimeout::TIMEOUT_2S);
@@ -130,43 +133,19 @@ void loop()
     if (now - last_telemetry_ms >= 20) {
         last_telemetry_ms = now;
 
-        hal::Vector3 accel;
-        if (accel_sensor.read_accel(accel)) {
-            // Sliding Peak-to-Peak envelope over 10 samples (200 ms)
-            static int16_t min_x = 32767, max_x = -32768;
-            static int16_t min_y = 32767, max_y = -32768;
-            static int16_t min_z = 32767, max_z = -32768;
-            static uint8_t sample_count = 0;
-            static uint16_t vib_envelope = 0;
-
-            if (accel.x < min_x) min_x = accel.x;
-            if (accel.x > max_x) max_x = accel.x;
-            if (accel.y < min_y) min_y = accel.y;
-            if (accel.y > max_y) max_y = accel.y;
-            if (accel.z < min_z) min_z = accel.z;
-            if (accel.z > max_z) max_z = accel.z;
-
-            sample_count++;
-            if (sample_count >= 10) {
-                uint16_t dx = static_cast<uint16_t>(max_x - min_x);
-                uint16_t dy = static_cast<uint16_t>(max_y - min_y);
-                uint16_t dz = static_cast<uint16_t>(max_z - min_z);
-                // Total vibration magnitude (gravity DC bias cancelled out)
-                vib_envelope = dx + dy + dz;
-
-                min_x = 32767; max_x = -32768;
-                min_y = 32767; max_y = -32768;
-                min_z = 32767; max_z = -32768;
-                sample_count = 0;
-            }
-
-            // Output format: X:val Y:val Z:val Vib:val
-            Serial.print(F("X:")); Serial.print(accel.x);
-            Serial.print(F(" Y:")); Serial.print(accel.y);
-            Serial.print(F(" Z:")); Serial.print(accel.z);
-            Serial.print(F(" Vib:")); Serial.print(vib_envelope);
-            Serial.println();
+        // Sample vibration monitor if spin controller is not actively sampling it
+        if (!spin_ctrl.is_active()) {
+            vib_monitor.update();
         }
+
+        const hal::Vector3& accel = vib_monitor.get_last_sample();
+
+        // Output format: X:val Y:val Z:val Vib:val
+        Serial.print(F("X:")); Serial.print(accel.x);
+        Serial.print(F(" Y:")); Serial.print(accel.y);
+        Serial.print(F(" Z:")); Serial.print(accel.z);
+        Serial.print(F(" Vib:")); Serial.print(vib_monitor.get_vibration());
+        Serial.println();
     }
 
     // Pet / kick hardware watchdog to prevent timeout reset
