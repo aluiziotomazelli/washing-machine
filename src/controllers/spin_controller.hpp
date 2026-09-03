@@ -12,46 +12,49 @@ namespace controllers {
  * @enum SpinSubPhase
  * @brief Internal non-blocking states of the centrifugal extraction cycle.
  */
-enum class SpinSubPhase : uint8_t {
+enum class SpinSubPhase : uint8_t
+{
     IDLE = 0,
-    CLUTCH_ENGAGE,    // Wait for mechanical clutch/brake to engage
-    SPRINT_ON,        // Motor sprint pulse
-    SPRINT_OFF,       // Resting pause between sprints
-    DUTY_RUN_ON,      // Continuous extraction: 4s motor pulse
-    DUTY_RUN_OFF,     // Continuous extraction: 4s inertia coast
-    COAST_DOWN,       // Normal completion drum spin-down before pump off
-    PAUSE_COASTING,   // Controlled deceleration during pause with pump on
-    PAUSED,           // Drum fully stopped and pump off
-    STOP_COASTING     // Controlled deceleration during stop with pump on
+    CLUTCH_ENGAGE,  // Wait for mechanical clutch/brake to engage
+    SPRINT_ON,      // Motor sprint pulse
+    SPRINT_OFF,     // Resting pause between sprints
+    DUTY_RUN_ON,    // Continuous extraction: 4s motor pulse
+    DUTY_RUN_OFF,   // Continuous extraction: 4s inertia coast
+    COAST_DOWN,     // Normal completion drum spin-down before pump off
+    PAUSE_COASTING, // Controlled deceleration during pause with pump on
+    PAUSED,         // Drum fully stopped and pump off
+    STOP_COASTING   // Controlled deceleration during stop with pump on
 };
 
 /**
  * @struct SpinConfig
  * @brief Configuration timings for spin cycle phases (in milliseconds).
  */
-struct SpinConfig {
-    uint32_t clutch_engage_ms{5000};    // 5s clutch engagement delay
-    uint32_t sprint_pause_ms{4000};     // 4s rest between sprints
-    uint32_t duty_on_ms{4000};          // 4s motor pulse
-    uint32_t duty_off_ms{4000};         // 4s inertia coast
-    uint32_t coast_down_ms{10000};      // 10s drum coast-down before pump off
+struct SpinConfig
+{
+    uint32_t clutch_engage_ms{5000}; // 5s clutch engagement delay
+    uint32_t sprint_pause_ms{3000};  // 4s rest between sprints
+    uint32_t duty_on_ms{4000};       // 4s motor pulse
+    uint32_t duty_off_ms{4000};      // 4s inertia coast
+    uint32_t coast_down_ms{10000};   // 10s drum coast-down before pump off
 };
 
 /**
  * @class SpinController
- * @brief Manages centrifugal extraction sequence: clutch engage -> dynamic sprints -> 4s/4s inertia duty cycle -> coast down.
- * 
+ * @brief Manages centrifugal extraction sequence: clutch engage -> dynamic sprints -> 4s/4s inertia duty cycle -> coast
+ * down.
+ *
  * Features mechanical transmission protection: routes pause() and stop() through non-blocking coast-down,
  * keeping the pump/actuator engaged until the drum slows down to avoid violent mechanical braking.
  */
-class SpinController {
+class SpinController
+{
 public:
     SpinController(
         hal::ITimerHAL& timer_hal,
         hal::IDigitalOutput& drain_pump,
         hal::IReversibleMotor& motor,
-        const SpinConfig& config = SpinConfig{}
-    );
+        const SpinConfig& config = SpinConfig{});
 
     /**
      * @brief Start centrifugal spin cycle.

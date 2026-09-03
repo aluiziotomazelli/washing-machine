@@ -196,6 +196,7 @@ void PanelController::sync_state_with_coordinator()
             led_panel_.set_program(selected_program_);
         }
         else if (current_state == domain::MachineState::ERROR) {
+            // TODO: verify if system can be rebooted from error pressing any button (e.g. start/pause)
             buzzer_.play_pattern(BuzzerPattern::ERROR_ALARM);
         }
         else if (current_state == domain::MachineState::IDLE) {
