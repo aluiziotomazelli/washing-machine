@@ -29,6 +29,9 @@ enum class CycleStep : uint8_t {
     DRAIN,
     SPIN_INTERMEDIATE,
     SPIN_FINAL,
+    RECOVERY_FILL,
+    RECOVERY_AGITATE,
+    RECOVERY_DRAIN,
     SETTLE_PAUSE,
     FINISHED
 };
@@ -56,6 +59,11 @@ struct CoordinatorConfig {
 
     // Final Spin Duration (in seconds)
     uint32_t final_spin_sec{4 * 60};               // 4 min final spin
+
+    // Unbalance Hydraulic Recovery
+    uint8_t max_unbalance_recoveries{1};          // 1 hydraulic recovery attempt before latching error
+    uint32_t unbalance_agitate_sec{30};           // 30s brief agitation to redistribute clothes
+    domain::WaterLevel unbalance_fill_level{domain::WaterLevel::LOW_LEVEL}; // Minimum water level
 };
 
 /**
@@ -96,6 +104,7 @@ public:
     WaterLevel get_level() const { return level_; }
     bool is_softener_enabled() const { return softener_enabled_; }
     uint8_t get_step_index() const { return step_index_; }
+    uint8_t get_unbalance_recoveries() const { return unbalance_recoveries_; }
 
 private:
     void plan_next_step();
@@ -125,6 +134,10 @@ private:
     // Recipe Step Tracking
     uint8_t step_index_{0};
     bool in_rinse_subcycle_{false};
+
+    // Unbalance Recovery Tracking
+    uint8_t unbalance_recoveries_{0};
+    CycleStep saved_spin_step_{CycleStep::NONE};
 
     // Software Pause / Settle / Soak Timers
     uint32_t step_start_ms_{0};
