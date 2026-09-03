@@ -158,6 +158,12 @@ TEST_F(SpinControllerTest, PauseDuringSpinKeepsPumpOnUntilCoastDownCompletes)
     spin_ctrl.resume();
     EXPECT_FALSE(spin_ctrl.is_paused());
     EXPECT_EQ(spin_ctrl.get_sub_phase(), controllers::SpinSubPhase::CLUTCH_ENGAGE);
+
+    // After clutch engages, it restarts from Sprint 1
+    simulated_time_ms += 1000;
+    EXPECT_CALL(mock_motor, rotate_clockwise()).Times(1);
+    spin_ctrl.update();
+    EXPECT_EQ(spin_ctrl.get_sub_phase(), controllers::SpinSubPhase::SPRINT_ON);
 }
 
 TEST_F(SpinControllerTest, StopDuringSpinKeepsPumpOnUntilCoastDownCompletes)
