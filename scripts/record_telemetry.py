@@ -67,7 +67,17 @@ def main():
             f.write("elapsed_ms,elapsed_s,x,y,z,vib\n")
 
             while True:
-                line = ser.readline().decode("utf-8", errors="ignore").strip()
+                try:
+                    line = ser.readline().decode("utf-8", errors="ignore").strip()
+                except serial.SerialException:
+                    time.sleep(0.2)
+                    try:
+                        ser.close()
+                        ser.open()
+                    except Exception:
+                        pass
+                    continue
+
                 if not line:
                     continue
 

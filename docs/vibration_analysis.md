@@ -83,6 +83,7 @@ To eliminate resonance spikes and water drag, the sprint profile was updated to 
 | 8 | `test8_tailored_sprint_steps_unbalanced_light_blanket.csv` | 4s/3.5s, 5.5s/5s, 7s/4s, 8s/3s | Light dry blanket (one side) | 1003 | 5326 | 3331 | Initial inertia preserved, but S2 OFF lingered in resonance |
 | 9 | `test9_finetuned_sprint_steps_unbalanced_light_blanket.csv` | 4s/3.5s, 5s/3.5s, 6s/4s, 7s/3s | Light dry blanket (one side) | 1616 | 5005 | 3520 | Fully stable, no deceleration resonance, seamless cruise |
 | 10 | `test10_finetuned_sprint_empty_tub.csv` | 4s/3.5s, 5s/3.5s, 6s/4s, 7s/3s | Empty basket | 1366 | 3729 | 2255 | Peak dropped by 32.5% compared to run 1, very quiet |
+| 11 | `test11_finetuned_sprint_unbalanced_heavy_blanket.csv` | 4s/3.5s, 5s/3.5s, 6s/4s, 7s/3s | Heavy folded blanket (one side) | 3105 | 11865 | 7892 | Heavy vibration, but zero cabinet displacement or foot slip |
 
 ## Experimental observations
 
@@ -125,6 +126,8 @@ Axis breakdown during steady operation compared to the foot-slip window:
 | Z (Front-to-back) | $\Delta = 1784$ LSB | $\Delta = 5981$ LSB | 3.35x |
 
 During the walking event, vertical acceleration on axis X swung between -5908 LSB ($0.72g$) and -9806 LSB ($1.20g$). When vertical acceleration reached $0.72g$, the effective normal force pressing the rubber feet against the floor dropped by 28%. At that exact moment, the lateral force on axis Y peaked at 6706 LSB. The reduced normal force dropped the static friction limit below the applied lateral force, causing the feet to slide across the floor.
+
+In test 11, the same concentrated heavy blanket that caused cabinet walking in test 5 was retested using the calibrated progressive sprint schedule. Peak vibration dropped from 15417 down to 11865 (a 23% reduction), and zero samples crossed into the 14000+ foot slip zone. The cabinet remained firmly planted with no lateral translation.
 
 ### Duration vs single shocks
 
