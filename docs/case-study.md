@@ -20,7 +20,7 @@
 
 ## Introduction & Background
 
-In 2017, a domestic washing machine suffered a catastrophic failure of its proprietary electronic control board. Rather than discarding the machine, the electronics were reverse-engineered and replaced with an **ATmega328P microcontroller board (Arduino Pro Mini, 5V, 16MHz)** driving TRIACs and power relays.
+In 2017, a domestic washing machine suffered a catastrophic failure of its proprietary electronic control board. Rather than discarding the machine, the electronics were reverse-engineered and replaced with an **ATmega328P microcontroller board (Arduino Pro Mini, 5V, 16MHz)** driving TRIACs to switch power to the motor, pumps, etc.
 
 The initial prototype proved that open-source hardware could successfully breathe new life into household machinery. However, written as a quick single-file `.ino` sketch, the code carried significant technical debt.
 
@@ -230,7 +230,7 @@ graph TD
     end
 
     subgraph Hardware_UI ["HAL & UI Adapters"]
-        HAL["HAL Drivers (Motor, Relays, Sensor)"]
+        HAL["HAL Drivers (Motor, TRIACs, Sensor)"]
         UI["UI Drivers (LedPanel, Buzzer, Buttons)"]
     end
 
@@ -259,7 +259,7 @@ Rather than handling solenoid timings, motor reversals, and drain timeouts insid
 | [`FillController`](../src/controllers/fill_controller.hpp) | Tub water intake | Controls main/softener solenoids; 12-min fail-safe timeout; `pause()` freezes timeout counter. |
 | [`Agitator`](../src/controllers/agitator.hpp) | Mechanical fabric wash | 300 ms ON / 200 ms OFF stroke alternation; non-blocking CW/CCW reversal; preserves progress on `pause()`. |
 | [`DrainController`](../src/controllers/drain_controller.hpp) | Water evacuation | Controls pump; detects empty tub; executes 30-sec residual water bleeding; 6-min timeout; `pause()` freezes bleeding. |
-| [`SpinController`](../src/controllers/spin_controller.hpp) | Centrifugal water extraction | 5s clutch engagement; volume-based sprints; 4s ON / 4s OFF duty cycle; non-blocking transmission protection. |
+| [`SpinController`](../src/controllers/spin_controller.hpp) | Centrifugal water extraction | 5s clutch engagement; empirically tuned progressive sprints to overcome resonance oscillations; 4s ON / 4s OFF duty cycle; non-blocking transmission protection. |
 
 ### 3. Deep-Dive: Top-Load Transmission Mechanics & Inertia Management
 Domestic top-load washing machine transmissions (e.g. Whirlpool/Brastemp/Consul) have unique mechanical constraints:
@@ -267,12 +267,12 @@ Domestic top-load washing machine transmissions (e.g. Whirlpool/Brastemp/Consul)
 - **Spin Mode (Actuator ON):** The electromechanical actuator pulls a mechanical arm, opening the brake band and meshing the ratchet clutch teeth. The entire drum spins at 700+ RPM.
 
 #### The "Violent Brake-Snap" Trap:
-If electrical power to the pump/actuator is cut while the drum is spinning at full speed, the brake spring instantly snaps the brake band onto the steel drum. This produces a loud mechanical crash ("tranco"), severely wearing the brake lining, straining the belt, and risking tooth shear on the plastic clutch came.
+If electrical power to the pump/actuator is cut while the drum is spinning at full speed, the brake spring instantly snaps the brake band onto the steel drum. This produces a loud mechanical crash, severely wearing the brake lining, straining the belt, and risking tooth shear on the plastic clutch came.
 
 #### The Software Solution: Non-Blocking `COAST_DOWN` Protection
 In [`SpinController`](../src/controllers/spin_controller.hpp), both normal cycle completion, `pause()`, and `stop()` pass through a 10-second `COAST_DOWN` phase:
 1. Power to the motor is cut immediately.
-2. The drain pump/actuator **remains energized** for 10 seconds, allowing the drum to decelerate smoothly through air resistance and natural friction.
+2. The drain pump/actuator **remains energized** for 10 seconds, allowing the drum to decelerate smoothly through natural friction.
 3. Only when the drum has settled does the controller de-energize the actuator, letting the brake engage quietly without mechanical shock.
 
 #### Rotational Inertia Duty Cycle (4s ON / 4s OFF):
@@ -373,15 +373,15 @@ void loop() {
 
 ## Chapter 7: The WS2812B Addressable LED Engine, Hardware Re-spin & The AVR Interrupt Collision Dilemma
 
-With the discrete LED release (`v0.3.1`) validated and archived, the physical control panel (wooden box) presented a compelling mechanical and visual opportunity: replacing the complex harness of 7 discrete through-hole LEDs with a single, compact **9-pixel WS2812B addressable RGB strip**.
+With the discrete LED release (`v0.3.1`) validated and archived, the physical control panel (wooden box) presented a compelling mechanical and visual opportunity: replacing the complex harness of 7 discrete through-hole LEDs with a single, compact **9-pixel WS2812B addressable RGB strip**. Discret leds serves well, but the led strip can be controlled with a single pin, saving pins to rearrange buttons and free SDA and SCL pins, enabling us to connect vibration sensor and make this project ready for the next steps.
 
-This upgrade introduced fascinating embedded challenges spanning cycle-accurate AVR assembly, real-world analog voltage levels, and timer interrupt collisions.
+This upgrade introduced embedded challenges spanning cycle-accurate AVR assembly, real-world analog voltage levels, and timer interrupt collisions.
 
 ```
 Physical Layout of the 9-Pixel Strip (docs/box.webp):
 [ P8 ]       [ P7 ]       [ P6 ]   [ P5 ]   [ P4 ]       [ P3 ]       [ P2 ]   [ P1 ]   [ P0 ]
-Amac.        Vazio        Baixo    Médio    Alto         Pesado       Lavar    Enxag.   Centrif.
-(Rose)       (OFF)       (Cyan)   (Cyan)   (Cyan)       (White)      (White)  (White)  (White)
+Softner      Empty        Low      Medium    High         Heavy        Wash     Rinse    Spin
+(Rose)       (OFF)       (Cyan)    (Cyan)   (Cyan)       (White)      (White)  (White)  (White)
   ◄────────────────────────────────── Physical Strip Orientation ────────────────────────────── DIN
 ```
 
@@ -389,7 +389,7 @@ Amac.        Vazio        Baixo    Médio    Alto         Pesado       Lavar    
 
 ### 1. The Zero-Heap 16 MHz AVR Assembly Driver (`Ws2812Strip`)
 
-Standard third-party libraries (like FastLED or Adafruit NeoPixel) bring significant flash overhead, dynamic memory allocations, and monolithic dependencies unsuitable for a safety-critical appliance on an ATmega328P.
+Standard third-party libraries (like FastLED or Adafruit NeoPixel) bring significant flash overhead, dynamic memory allocations, and monolithic dependencies unsuitable for a safety-critical appliance on an ATmega328P, and is overkill for simple animations we need, in fact, the only animation used is breathing.
 
 We engineered a bespoke, zero-heap hardware driver [`Ws2812Strip`](../src/hal/ws2812_strip.hpp) adhering to Clean Architecture:
 - **Static Buffer:** Exactly $9 \times 3 = 27$ bytes in GRB color order. Zero heap allocation (`malloc` free).
@@ -406,7 +406,7 @@ We engineered a bespoke, zero-heap hardware driver [`Ws2812Strip`](../src/hal/ws
 Thanks to the interface inversion introduced in Chapter 6 ([`ILedPanel`](../src/ui/interfaces/i_led_panel.hpp)), migrating the machine from discrete LEDs to the RGB strip required **zero modifications** to `PanelController` or domain logic.
 
 The [`StripLedPanel`](../src/ui/strip_led_panel.hpp) implements:
-- **Dual-Tone Modern Aesthetic:** Water levels glow exclusively in Cyan (`0, 220, 255`), wash stages in Pure White (`255, 255, 255`), and the softener indicator in a pastel rose (`255, 100, 140`).
+- **Multi-Tone Aesthetic:** Water levels glow exclusively in Cyan (`0, 220, 255`), wash stages in Pure White (`255, 255, 255`), and the softener indicator in a pastel rose (`255, 100, 140`).
 - **Smooth "Breathing" Animation (2-second Period):** The active running stage oscillates smoothly in brightness, future stages maintain a faint 15% standby glow, finished stages extinguish, and paused states pulse synchronously.
 - **Integer-Only Wave Math:** Rather than importing heavy floating-point `sin()` math (which consumes ~1.5 KB of AVR Flash), the breathing animation employs integer-only symmetrical triangle wave math:
   ```cpp
@@ -469,14 +469,13 @@ void PanelController::update()
 ```
 - While a 50 ms button click beep or repeated loud finish beeps are sounding, frame transmission is paused.
 - The human eye cannot perceive a 50 ms pause in a slow 2-second breathing wave, but the human ear instantly perceives the pristine, pure 3000 Hz tone.
-- In addition, the strip frame rate was throttled to **30 FPS** (`frame_interval_ms = 33`), reducing the total CPU duty cycle consumed by the WS2812 engine to under **0.8%**!
+- In addition, the strip frame rate was throttled to **30 FPS** (`frame_interval_ms = 33`), reducing the total CPU duty cycle consumed by the WS2812 engine.
 
 ---
 
 ### 5. Appliance Standby & Wake-Up UX
 
-To match the behavior of modern domestic appliances:
-- **Standby Sleep:** When the cycle completes, the coordinator enters `FINISHED`. The LED strip shuts off completely to save power.
+- **Standby Sleep:** When the cycle completes, the coordinator enters `FINISHED`. The LED strip shuts off completely.
 - **Wake-Up on Interaction:** Touching any configuration button (Program, Level, Softener) automatically calls `coordinator.stop_cycle()`, transitioning the machine back to `IDLE` and instantly waking up the LED display with the updated settings.
 
 ---
@@ -499,7 +498,7 @@ The firmware is now **production-ready and field-tested** for all domestic washi
 ## Chapter 8: The autonomous safety net - hardware watchdog, MPU-6050 accelerometer, and two-tier dynamic anti-walking spin control
 
 With the WS2812B user interface and the liberated I2C bus (A4/A5) firmly established, milestone `v0.5.0` addressed the most demanding mechanical and safety challenges of domestic washing machine control:
-1. Guaranteeing system fail-safe resilience against firmware hangs, brownouts, and electromagnetic relay noise via an AVR hardware watchdog timer.
+1. Guaranteeing system fail-safe resilience against firmware hangs, brownouts, and electromagnetic noise via an AVR hardware watchdog timer.
 2. Interfacing a 6-axis MPU-6050 MEMS accelerometer over I2C without third-party library overhead or dynamic memory allocations.
 3. Quantifying washing machine drum resonance mechanics and preventing the destructive phenomenon known as "machine walking" during spin acceleration.
 4. Implementing a real-time, gravity-immune vibration monitoring engine with dual-tier shock and sustained unbalance trip logic.
@@ -555,7 +554,7 @@ Standard third-party MPU-6050 libraries (such as Adafruit or I2Cdevlib) introduc
 2. [`Mpu6050`](../src/hal/mpu6050.hpp): A dedicated, zero-heap hardware driver:
    - **Device Wake-Up:** Clears the sleep bit in `PWR_MGMT_1` (`0x6B = 0x00`).
    - **Dynamic Range Selection:** Configures `ACCEL_CONFIG` (`0x1C = 0x08`) for $\pm 4g$ full-scale sensitivity ($8192\text{ LSB}/g$), perfectly suited for washing machine acceleration dynamics.
-   - **Hardware Digital Low Pass Filter (DLPF):** Configures `CONFIG` (`0x1A = 0x03`) for a 44 Hz cutoff frequency. This hardware filter attenuates high-frequency motor commutator noise, relay electromagnetic spikes, and acoustic vibrations while preserving structural drum oscillation.
+   - **Hardware Digital Low Pass Filter (DLPF):** Configures `CONFIG` (`0x1A = 0x03`) for a 44 Hz cutoff frequency. This hardware filter attenuates high-frequency motor commutator noise, and acoustic vibrations while preserving structural drum oscillation.
    - **Fast Burst Read:** Reads all 6 raw accelerometer data bytes (`0x3B` to `0x40`) in a single continuous I2C transaction, maximizing bus efficiency.
 
 ---
@@ -635,7 +634,7 @@ Rather than immediately alarming and halting the wash cycle when an unbalance oc
                │    (SpinController Internal)         │
                └──────────────────┬───────────────────┘
                                   │
-                   Dry Retries < max (Default 2)?
+                   Dry Retries < max (Default 1)?
                      ├── YES ──► Stop motor, enter RETRY_COASTING (10s),
                      │           pump ON, reset monitor, restart sprints
                      │
@@ -669,7 +668,7 @@ When `VibrationMonitor` reports critical unbalance during active rotation:
 - The controller enters `RETRY_COASTING`, maintaining the drain pump active for 10 seconds to allow the drum to decelerate smoothly to 0 RPM.
 - The vibration monitor is reset.
 - The controller re-engages the mechanical clutch and restarts the sprint ramp from Sprint 1. Often, the gentle deceleration and re-acceleration allows clothes to settle into a better balance without consuming water.
-- Up to `max_unbalance_retries` (default: 2) are performed.
+- Up to `max_unbalance_retries` (default: 1) are performed.
 
 #### Tier 2: Active hydraulic redistribution in `WashCycleCoordinator`
 If all dry retries fail, `SpinController` flags `has_error_ = true`. The coordinator intercepts this state before triggering an alarm:
