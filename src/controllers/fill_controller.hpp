@@ -33,6 +33,7 @@ public:
     bool is_paused() const { return is_paused_; }
     bool is_finished() const { return is_finished_; }
     bool has_error() const { return has_error_; }
+    void reset_error() { has_error_ = false; }
 
 private:
     hal::ITimerHAL& timer_hal_;

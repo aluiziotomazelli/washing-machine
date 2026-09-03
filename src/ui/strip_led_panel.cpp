@@ -179,6 +179,12 @@ void StripLedPanel::render_frame(uint32_t now)
                 apply_color(k_idx_spin, k_color_red, 255);
             }
         }
+        else if (error_ == domain::MachineError::UNBALANCED_LOAD) {
+            // Unbalance error: blink Spin LED in RED
+            if (blink_state_) {
+                apply_color(k_idx_spin, k_color_red, 255);
+            }
+        }
         // When FILL_TIMEOUT, program LEDs stay completely OFF
     }
     else if (state_ == domain::MachineState::IDLE) {

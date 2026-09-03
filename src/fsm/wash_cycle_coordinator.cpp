@@ -34,6 +34,8 @@ void WashCycleCoordinator::start_cycle(WashProgram program, WaterLevel level, bo
     current_error_ = MachineError::NONE;
     step_index_ = 0;
     in_rinse_subcycle_ = false;
+    unbalance_recoveries_ = 0;
+    saved_spin_step_ = CycleStep::NONE;
 
     plan_next_step();
 }
@@ -67,6 +69,21 @@ void WashCycleCoordinator::pause_cycle()
 
 void WashCycleCoordinator::resume_cycle()
 {
+    if (state_ == MachineState::ERROR) {
+        fill_ctrl_.reset_error();
+        drain_ctrl_.reset_error();
+        spin_ctrl_.reset_error();
+
+        unbalance_recoveries_ = 0;
+        saved_spin_step_ = CycleStep::NONE;
+        current_error_ = MachineError::NONE;
+        state_ = MachineState::RUNNING;
+        step_start_ms_ = timer_hal_.get_time_ms();
+
+        execute_step(current_step_);
+        return;
+    }
+
     if (state_ != MachineState::PAUSED) {
         return;
     }
@@ -102,12 +119,17 @@ void WashCycleCoordinator::advance_step()
 void WashCycleCoordinator::stop_cycle()
 {
     stop_active_process();
+    fill_ctrl_.reset_error();
+    drain_ctrl_.reset_error();
+    spin_ctrl_.reset_error();
     state_ = MachineState::IDLE;
     current_error_ = MachineError::NONE;
     current_stage_ = WashStage::IDLE;
     current_step_ = CycleStep::NONE;
     step_index_ = 0;
     in_rinse_subcycle_ = false;
+    unbalance_recoveries_ = 0;
+    saved_spin_step_ = CycleStep::NONE;
 }
 
 void WashCycleCoordinator::stop_active_process()
@@ -162,10 +184,15 @@ void WashCycleCoordinator::update()
             trigger_error(MachineError::FILL_TIMEOUT);
         }
         else if (fill_ctrl_.is_finished()) {
-            // Water filled! Settle water before motor starts
-            is_settling_ = true;
-            current_step_ = CycleStep::SETTLE_PAUSE;
-            step_start_ms_ = now;
+            if (current_step_ == CycleStep::RECOVERY_FILL) {
+                execute_step(CycleStep::RECOVERY_AGITATE);
+            }
+            else {
+                // Water filled! Settle water before motor starts
+                is_settling_ = true;
+                current_step_ = CycleStep::SETTLE_PAUSE;
+                step_start_ms_ = now;
+            }
         }
         return;
     }
@@ -173,8 +200,13 @@ void WashCycleCoordinator::update()
     if (agitator_.is_active()) {
         agitator_.update();
         if (agitator_.is_finished()) {
-            step_index_++;
-            plan_next_step();
+            if (current_step_ == CycleStep::RECOVERY_AGITATE) {
+                execute_step(CycleStep::RECOVERY_DRAIN);
+            }
+            else {
+                step_index_++;
+                plan_next_step();
+            }
         }
         return;
     }
@@ -185,15 +217,31 @@ void WashCycleCoordinator::update()
             trigger_error(MachineError::DRAIN_TIMEOUT);
         }
         else if (drain_ctrl_.is_finished()) {
-            step_index_++;
-            plan_next_step();
+            if (current_step_ == CycleStep::RECOVERY_DRAIN) {
+                spin_ctrl_.reset_error();
+                execute_step(saved_spin_step_);
+            }
+            else {
+                step_index_++;
+                plan_next_step();
+            }
         }
         return;
     }
 
     if (spin_ctrl_.is_active()) {
         spin_ctrl_.update();
-        if (spin_ctrl_.is_finished()) {
+        if (spin_ctrl_.has_error()) {
+            if (unbalance_recoveries_ < config_.max_unbalance_recoveries) {
+                unbalance_recoveries_++;
+                saved_spin_step_ = current_step_;
+                execute_step(CycleStep::RECOVERY_FILL);
+            }
+            else {
+                trigger_error(MachineError::UNBALANCED_LOAD);
+            }
+        }
+        else if (spin_ctrl_.is_finished()) {
             step_index_++;
             plan_next_step();
         }
@@ -206,11 +254,13 @@ void WashCycleCoordinator::exit_step(CycleStep from, CycleStep to)
     switch (from) {
     case CycleStep::FILL_MAIN:
     case CycleStep::FILL_SOFTENER:
+    case CycleStep::RECOVERY_FILL:
         fill_ctrl_.stop();
         break;
 
     case CycleStep::AGITATE_GENTLE:
     case CycleStep::AGITATE_NORMAL:
+    case CycleStep::RECOVERY_AGITATE:
         agitator_.stop();
         break;
 
@@ -219,8 +269,12 @@ void WashCycleCoordinator::exit_step(CycleStep from, CycleStep to)
         break;
 
     case CycleStep::DRAIN:
+    case CycleStep::RECOVERY_DRAIN:
         // Keep drain pump running if transitioning directly into spin (smooth handover)
-        if (to != CycleStep::SPIN_INTERMEDIATE && to != CycleStep::SPIN_FINAL) {
+        if (to == CycleStep::SPIN_INTERMEDIATE || to == CycleStep::SPIN_FINAL) {
+            drain_ctrl_.handover();
+        }
+        else {
             drain_ctrl_.stop();
         }
         break;
@@ -298,6 +352,18 @@ void WashCycleCoordinator::execute_step(CycleStep step)
 
     case CycleStep::SPIN_FINAL:
         spin_ctrl_.start(level_, config_.final_spin_sec);
+        break;
+
+    case CycleStep::RECOVERY_FILL:
+        fill_ctrl_.start(config_.unbalance_fill_level, false);
+        break;
+
+    case CycleStep::RECOVERY_AGITATE:
+        agitator_.start(config_.unbalance_agitate_sec, 300, 200);
+        break;
+
+    case CycleStep::RECOVERY_DRAIN:
+        drain_ctrl_.start();
         break;
 
     default:

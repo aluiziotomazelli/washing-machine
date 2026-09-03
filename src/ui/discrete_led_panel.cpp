@@ -68,6 +68,8 @@ void DiscreteLedPanel::update()
                 write_pin(pins_.wash, blink_state_);
                 write_pin(pins_.rinse, blink_state_);
                 write_pin(pins_.spin, blink_state_);
+            } else if (current_error_ == MachineError::UNBALANCED_LOAD) {
+                write_pin(pins_.spin, blink_state_);
             } else {
                 write_pin(pins_.level_low, blink_state_);
                 write_pin(pins_.level_med, blink_state_);
@@ -229,6 +231,13 @@ void DiscreteLedPanel::set_machine_state(MachineState state, MachineError error)
             write_pin(pins_.level_med, false);
             write_pin(pins_.wash, true);
             write_pin(pins_.rinse, true);
+            write_pin(pins_.spin, true);
+        } else if (current_error_ == MachineError::UNBALANCED_LOAD) {
+            // Unbalance error: blink spin LED only, turn off others
+            write_pin(pins_.level_low, false);
+            write_pin(pins_.level_med, false);
+            write_pin(pins_.wash, false);
+            write_pin(pins_.rinse, false);
             write_pin(pins_.spin, true);
         } else {
             // Generic error: blink level LEDs

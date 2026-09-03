@@ -50,8 +50,9 @@ enum class MachineState : uint8_t {
  */
 enum class MachineError : uint8_t {
     NONE = 0,
-    FILL_TIMEOUT,   // Water inlet / solenoid valve timeout (legacy: type 1)
-    DRAIN_TIMEOUT   // Drain pump / water evacuation timeout (legacy: type 2)
+    FILL_TIMEOUT,    // Water inlet / solenoid valve timeout (legacy: type 1)
+    DRAIN_TIMEOUT,   // Drain pump / water evacuation timeout (legacy: type 2)
+    UNBALANCED_LOAD  // Critical tub vibration / unbalance trip (safety)
 };
 
 } // namespace domain

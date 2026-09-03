@@ -256,6 +256,22 @@ TEST_F(StripLedPanelTest, RendersDrainTimeoutErrorBlinkingRedProgramStages)
     EXPECT_EQ(strip.get_pixel(StripLedPanel::k_idx_lvl_med), RgbColor(0, 0, 0));
 }
 
+TEST_F(StripLedPanelTest, RendersUnbalancedLoadErrorBlinkingRedSpin)
+{
+    panel.init();
+    panel.set_machine_state(MachineState::ERROR, MachineError::UNBALANCED_LOAD);
+
+    // Error on Unbalance: Spin LED blinks in RED, all other LEDs are OFF
+    RgbColor p_spin = strip.get_pixel(StripLedPanel::k_idx_spin);
+    EXPECT_GT(p_spin.r, 0);
+    EXPECT_EQ(p_spin.g, 0);
+    EXPECT_EQ(p_spin.b, 0);
+
+    EXPECT_EQ(strip.get_pixel(StripLedPanel::k_idx_wash), RgbColor(0, 0, 0));
+    EXPECT_EQ(strip.get_pixel(StripLedPanel::k_idx_rinse), RgbColor(0, 0, 0));
+    EXPECT_EQ(strip.get_pixel(StripLedPanel::k_idx_lvl_low), RgbColor(0, 0, 0));
+}
+
 TEST_F(StripLedPanelTest, TurnOffAllClearsAllPixelsAndCallsShow)
 {
     panel.init();

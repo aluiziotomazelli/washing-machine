@@ -31,7 +31,7 @@ protected:
     controllers::FillController fill_ctrl{mock_timer, mock_valve_main, mock_valve_softener, mock_water_sensor, 5000};
     controllers::Agitator agitator{mock_timer, mock_motor};
     controllers::DrainController drain_ctrl{mock_timer, mock_drain_pump, mock_water_sensor, 5000};
-    controllers::SpinConfig spin_config{100, 100, 100, 100, 200};
+    controllers::SpinConfig spin_config{100, 100, 100, 200};
     controllers::SpinController spin_ctrl{mock_timer, mock_drain_pump, mock_motor, spin_config};
 
     fsm::WashCycleCoordinator coordinator{mock_timer, fill_ctrl, agitator, drain_ctrl, spin_ctrl};
@@ -311,4 +311,62 @@ TEST_F(PanelControllerTest, ButtonClickInFinishedStateWakesUpToIdle)
 
     panel_ctrl.update();
     EXPECT_EQ(coordinator.get_state(), MachineState::IDLE);
+}
+
+TEST_F(PanelControllerTest, ClickingStartPauseInErrorResumesCycleAndBeeps)
+{
+    panel_ctrl.init();
+
+    // Start cycle
+    EXPECT_CALL(btn_start, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+    panel_ctrl.update();
+
+    // Cause fill timeout (5000ms)
+    ON_CALL(mock_timer, get_time_ms()).WillByDefault(Return(10000));
+    coordinator.update();
+    panel_ctrl.update();
+
+    EXPECT_EQ(coordinator.get_state(), MachineState::ERROR);
+
+    // Clicking Start/Pause while in ERROR:
+    // Should call coordinator.resume_cycle(), beep, and return to RUNNING
+    EXPECT_CALL(buzzer, beep(50)).Times(1);
+    EXPECT_CALL(btn_start, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+
+    panel_ctrl.update();
+    EXPECT_EQ(coordinator.get_state(), MachineState::RUNNING);
+    EXPECT_EQ(coordinator.get_error(), MachineError::NONE);
+}
+
+TEST_F(PanelControllerTest, VeryLongClickInErrorCancelsCycleToIdle)
+{
+    panel_ctrl.init();
+
+    // Start cycle
+    EXPECT_CALL(btn_start, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+    panel_ctrl.update();
+
+    // Cause fill timeout (5000ms)
+    ON_CALL(mock_timer, get_time_ms()).WillByDefault(Return(10000));
+    coordinator.update();
+    panel_ctrl.update();
+
+    EXPECT_EQ(coordinator.get_state(), MachineState::ERROR);
+
+    // Very long click while in ERROR:
+    // Should call coordinator.stop_cycle(), play double beep, and return to IDLE
+    EXPECT_CALL(buzzer, play_pattern(BuzzerPattern::DOUBLE_BEEP)).Times(1);
+    EXPECT_CALL(btn_start, get_last_click())
+        .WillOnce(Return(ButtonClickType::VERY_LONG_CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+
+    panel_ctrl.update();
+    EXPECT_EQ(coordinator.get_state(), MachineState::IDLE);
+    EXPECT_EQ(coordinator.get_error(), MachineError::NONE);
 }
