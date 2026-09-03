@@ -184,8 +184,8 @@ Single-pin binary actuators (inlet valves, drain pump, clutch actuator) are cont
 - **Active-Low vs Active-High Support:** Seamlessly drives direct-logic outputs and inverted relay modules.
 - **Safety Decision (Exclusion of `turn_on_all`):** Turning on all physical loads simultaneously in an appliance (filling valves, heater, pump, and spin motor at once) could cause power surges or domestic breaker trips. Thus, only batch *turn-off* (`turn_off_all()`) is supported for fail-safe emergency shutdowns.
 
-### 2. Bidirectional AC Motor: `ReversibleMotor`
-A reversible AC induction motor possesses two independent windings (Clockwise / Right and Counter-Clockwise / Left). Energizing both windings simultaneously creates a violent phase short-circuit across the TRIACs/relays.
+### 2. Bidirectional AC motor: `ReversibleMotor`
+A reversible AC induction motor possesses two directional windings (Clockwise / Right and Counter-Clockwise / Left). Energizing both windings simultaneously produces opposing magnetic fluxes that mechanically lock the rotor in a stall. In this stalled condition (zero back-EMF), both windings draw locked-rotor current simultaneously (exceeding $10\times$ nominal operating current), causing violent acoustic humming, rapid thermal overload of the motor insulation, and destructive stress on the driving power TRIACs.
 
 [`hal::ReversibleMotor`](../src/hal/reversible_motor.hpp) enforces safety through software:
 1. **Mutual Exclusion:** Before setting either direction pin to active level, the opposing direction pin is unconditionally forced to `LEVEL_LOW`.
