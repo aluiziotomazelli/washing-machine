@@ -35,13 +35,8 @@ void SpinController::start(domain::WaterLevel level, uint32_t duration_sec)
     is_active_ = true;
     is_paused_ = false;
     is_finished_ = false;
-    has_error_ = false;
-    unbalance_retries_ = 0;
     duty_run_elapsed_before_pause_ms_ = 0;
-
-    if (vibration_monitor_ != nullptr) {
-        vibration_monitor_->reset();
-    }
+    reset_error();
 
     // Always engage drain pump throughout entire spin
     drain_pump_.turn_on();
@@ -271,6 +266,15 @@ void SpinController::emergency_stop()
     sub_phase_ = SpinSubPhase::IDLE;
     is_active_ = false;
     is_paused_ = false;
+}
+
+void SpinController::reset_error()
+{
+    has_error_ = false;
+    unbalance_retries_ = 0;
+    if (vibration_monitor_ != nullptr) {
+        vibration_monitor_->reset();
+    }
 }
 
 } // namespace controllers

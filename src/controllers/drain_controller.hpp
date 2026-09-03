@@ -32,12 +32,14 @@ public:
     void pause();
     void resume();
     void stop();
+    void handover() { is_active_ = false; is_paused_ = false; }
 
     bool is_active() const { return is_active_; }
     bool is_paused() const { return is_paused_; }
     bool is_bleeding() const { return bleeding_phase_; }
     bool is_finished() const { return is_finished_; }
     bool has_error() const { return has_error_; }
+    void reset_error() { has_error_ = false; }
 
 private:
     hal::ITimerHAL& timer_hal_;

@@ -67,6 +67,19 @@ void WashCycleCoordinator::pause_cycle()
 
 void WashCycleCoordinator::resume_cycle()
 {
+    if (state_ == MachineState::ERROR) {
+        fill_ctrl_.reset_error();
+        drain_ctrl_.reset_error();
+        spin_ctrl_.reset_error();
+
+        current_error_ = MachineError::NONE;
+        state_ = MachineState::RUNNING;
+        step_start_ms_ = timer_hal_.get_time_ms();
+
+        execute_step(current_step_);
+        return;
+    }
+
     if (state_ != MachineState::PAUSED) {
         return;
     }
@@ -102,6 +115,9 @@ void WashCycleCoordinator::advance_step()
 void WashCycleCoordinator::stop_cycle()
 {
     stop_active_process();
+    fill_ctrl_.reset_error();
+    drain_ctrl_.reset_error();
+    spin_ctrl_.reset_error();
     state_ = MachineState::IDLE;
     current_error_ = MachineError::NONE;
     current_stage_ = WashStage::IDLE;
@@ -193,7 +209,10 @@ void WashCycleCoordinator::update()
 
     if (spin_ctrl_.is_active()) {
         spin_ctrl_.update();
-        if (spin_ctrl_.is_finished()) {
+        if (spin_ctrl_.has_error()) {
+            trigger_error(MachineError::UNBALANCED_LOAD);
+        }
+        else if (spin_ctrl_.is_finished()) {
             step_index_++;
             plan_next_step();
         }
@@ -220,7 +239,10 @@ void WashCycleCoordinator::exit_step(CycleStep from, CycleStep to)
 
     case CycleStep::DRAIN:
         // Keep drain pump running if transitioning directly into spin (smooth handover)
-        if (to != CycleStep::SPIN_INTERMEDIATE && to != CycleStep::SPIN_FINAL) {
+        if (to == CycleStep::SPIN_INTERMEDIATE || to == CycleStep::SPIN_FINAL) {
+            drain_ctrl_.handover();
+        }
+        else {
             drain_ctrl_.stop();
         }
         break;

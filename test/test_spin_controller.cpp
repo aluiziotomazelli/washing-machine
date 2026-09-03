@@ -374,3 +374,37 @@ TEST_F(SpinControllerTest, NewStartResetsRetriesAndError)
     EXPECT_FALSE(spin_with_vib.has_error());
     EXPECT_EQ(spin_with_vib.get_unbalance_retries(), 0);
 }
+
+TEST_F(SpinControllerTest, ResetErrorExplicitlyClearsErrorAndRetries)
+{
+    mocks::MockVibrationMonitor mock_vib;
+    controllers::SpinConfig retry_cfg = config;
+    retry_cfg.max_unbalance_retries = 0; // Immediate error on trip
+    retry_cfg.coast_down_ms = 2000;
+
+    controllers::SpinController spin_with_vib{
+        mock_timer,
+        mock_drain_pump,
+        mock_motor,
+        retry_cfg,
+        &mock_vib
+    };
+
+    EXPECT_CALL(mock_vib, reset()).Times(AtLeast(1));
+    spin_with_vib.start(domain::WaterLevel::LOW_LEVEL, 60);
+
+    // Trip into error
+    simulated_time_ms += 1000;
+    spin_with_vib.update();
+    EXPECT_CALL(mock_vib, update()).Times(1);
+    EXPECT_CALL(mock_vib, is_critical_unbalance()).WillOnce(Return(true));
+    spin_with_vib.update();
+    EXPECT_TRUE(spin_with_vib.has_error());
+
+    // Explicit reset_error() clears error and monitor
+    EXPECT_CALL(mock_vib, reset()).Times(1);
+    spin_with_vib.reset_error();
+
+    EXPECT_FALSE(spin_with_vib.has_error());
+    EXPECT_EQ(spin_with_vib.get_unbalance_retries(), 0);
+}

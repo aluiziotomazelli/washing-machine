@@ -108,6 +108,11 @@ public:
      */
     void emergency_stop();
 
+    /**
+     * @brief Clear latched error and reset unbalance retry counter.
+     */
+    void reset_error();
+
     bool is_active() const { return is_active_; }
     bool is_paused() const { return is_paused_; }
     bool is_finished() const { return is_finished_; }

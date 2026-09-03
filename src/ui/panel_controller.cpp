@@ -84,7 +84,7 @@ void PanelController::handle_start_pause_click(ButtonClickType click)
             coordinator_.pause_cycle();
             buzzer_.play_pattern(BuzzerPattern::DOUBLE_BEEP);
         }
-        else if (state == domain::MachineState::PAUSED) {
+        else if (state == domain::MachineState::PAUSED || state == domain::MachineState::ERROR) {
             coordinator_.resume_cycle();
             buzzer_.beep(50);
         }
@@ -98,7 +98,8 @@ void PanelController::handle_start_pause_click(ButtonClickType click)
         break;
 
     case ButtonClickType::VERY_LONG_CLICK:
-        if (state == domain::MachineState::RUNNING || state == domain::MachineState::PAUSED) {
+        if (state == domain::MachineState::RUNNING || state == domain::MachineState::PAUSED ||
+            state == domain::MachineState::ERROR) {
             coordinator_.stop_cycle();
             buzzer_.play_pattern(BuzzerPattern::DOUBLE_BEEP);
         }
@@ -196,7 +197,6 @@ void PanelController::sync_state_with_coordinator()
             led_panel_.set_program(selected_program_);
         }
         else if (current_state == domain::MachineState::ERROR) {
-            // TODO: verify if system can be rebooted from error pressing any button (e.g. start/pause)
             buzzer_.play_pattern(BuzzerPattern::ERROR_ALARM);
         }
         else if (current_state == domain::MachineState::IDLE) {

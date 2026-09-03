@@ -8,6 +8,7 @@
 #include "controllers/agitator.hpp"
 #include "controllers/drain_controller.hpp"
 #include "controllers/spin_controller.hpp"
+#include "mocks/mock_vibration_monitor.hpp"
 #include "fsm/wash_cycle_coordinator.hpp"
 
 using ::testing::NiceMock;
@@ -23,6 +24,7 @@ protected:
     NiceMock<mocks::MockDigitalOutput> mock_drain_pump;
     NiceMock<mocks::MockReversibleMotor> mock_motor;
     NiceMock<mocks::MockWaterLevelSensor> mock_water_sensor;
+    NiceMock<mocks::MockVibrationMonitor> mock_vib;
 
     uint32_t simulated_time_ms{0};
 
@@ -46,7 +48,7 @@ protected:
     controllers::Agitator agitator{mock_timer, mock_motor};
     controllers::DrainController drain_ctrl{mock_timer, mock_drain_pump, mock_water_sensor, 5000};
     controllers::SpinConfig spin_config{100, 100, 100, 200};
-    controllers::SpinController spin_ctrl{mock_timer, mock_drain_pump, mock_motor, spin_config};
+    controllers::SpinController spin_ctrl{mock_timer, mock_drain_pump, mock_motor, spin_config, &mock_vib};
 
     fsm::WashCycleCoordinator coordinator{
         mock_timer,
@@ -232,4 +234,101 @@ TEST_F(WashCycleCoordinatorTest, HandoverFromDrainToFillTurnsOffPump)
 
     EXPECT_EQ(coordinator.get_current_stage(), domain::WashStage::RINSE);
     EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::FILL_MAIN);
+}
+
+TEST_F(WashCycleCoordinatorTest, ResumesCycleAfterFillTimeoutError)
+{
+    coordinator.start_cycle(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false);
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::FILL_MAIN);
+    EXPECT_TRUE(fill_ctrl.is_active());
+
+    // Advance beyond 5000ms fill timeout
+    simulated_time_ms += 6000;
+    coordinator.update();
+
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::ERROR);
+    EXPECT_EQ(coordinator.get_error(), domain::MachineError::FILL_TIMEOUT);
+    EXPECT_FALSE(fill_ctrl.is_active());
+    EXPECT_TRUE(fill_ctrl.has_error());
+
+    // User opens tap and resumes cycle
+    coordinator.resume_cycle();
+
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::RUNNING);
+    EXPECT_EQ(coordinator.get_error(), domain::MachineError::NONE);
+    EXPECT_FALSE(fill_ctrl.has_error());
+    EXPECT_TRUE(fill_ctrl.is_active());
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::FILL_MAIN);
+}
+
+TEST_F(WashCycleCoordinatorTest, TransitionsToUnbalancedLoadErrorAndResumes)
+{
+    coordinator.start_cycle(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false);
+
+    // Skip DRAIN to reach SPIN_FINAL
+    coordinator.advance_step();
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::SPIN_FINAL);
+    EXPECT_TRUE(spin_ctrl.is_active());
+
+    // Clutch engage (100ms)
+    simulated_time_ms += 100;
+    coordinator.update();
+
+    // Trigger persistent unbalance
+    ON_CALL(mock_vib, is_critical_unbalance()).WillByDefault(Return(true));
+
+    // Trip 1 -> RETRY_COASTING (200ms)
+    simulated_time_ms += 50;
+    coordinator.update();
+    simulated_time_ms += 200;
+    coordinator.update();
+
+    // Clutch 2 (100ms)
+    simulated_time_ms += 100;
+    coordinator.update();
+
+    // Trip 2 -> RETRY_COASTING (200ms)
+    simulated_time_ms += 50;
+    coordinator.update();
+    simulated_time_ms += 200;
+    coordinator.update();
+
+    // Clutch 3 (100ms)
+    simulated_time_ms += 100;
+    coordinator.update();
+
+    // Trip 3 (exhausts 2 retries) -> STOP_COASTING (200ms)
+    simulated_time_ms += 50;
+    coordinator.update();
+    simulated_time_ms += 200;
+    coordinator.update();
+
+    // Coordinator latches error state
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::ERROR);
+    EXPECT_EQ(coordinator.get_error(), domain::MachineError::UNBALANCED_LOAD);
+
+    // User arranges laundry and resumes cycle
+    ON_CALL(mock_vib, is_critical_unbalance()).WillByDefault(Return(false));
+    coordinator.resume_cycle();
+
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::RUNNING);
+    EXPECT_EQ(coordinator.get_error(), domain::MachineError::NONE);
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::SPIN_FINAL);
+    EXPECT_TRUE(spin_ctrl.is_active());
+}
+
+TEST_F(WashCycleCoordinatorTest, StopCycleFromErrorStateResetsToIdle)
+{
+    coordinator.start_cycle(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false);
+
+    // Cause fill timeout
+    simulated_time_ms += 6000;
+    coordinator.update();
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::ERROR);
+
+    // Stop cancels from error
+    coordinator.stop_cycle();
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::IDLE);
+    EXPECT_EQ(coordinator.get_error(), domain::MachineError::NONE);
+    EXPECT_FALSE(fill_ctrl.has_error());
 }

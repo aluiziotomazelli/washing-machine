@@ -312,3 +312,61 @@ TEST_F(PanelControllerTest, ButtonClickInFinishedStateWakesUpToIdle)
     panel_ctrl.update();
     EXPECT_EQ(coordinator.get_state(), MachineState::IDLE);
 }
+
+TEST_F(PanelControllerTest, ClickingStartPauseInErrorResumesCycleAndBeeps)
+{
+    panel_ctrl.init();
+
+    // Start cycle
+    EXPECT_CALL(btn_start, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+    panel_ctrl.update();
+
+    // Cause fill timeout (5000ms)
+    ON_CALL(mock_timer, get_time_ms()).WillByDefault(Return(10000));
+    coordinator.update();
+    panel_ctrl.update();
+
+    EXPECT_EQ(coordinator.get_state(), MachineState::ERROR);
+
+    // Clicking Start/Pause while in ERROR:
+    // Should call coordinator.resume_cycle(), beep, and return to RUNNING
+    EXPECT_CALL(buzzer, beep(50)).Times(1);
+    EXPECT_CALL(btn_start, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+
+    panel_ctrl.update();
+    EXPECT_EQ(coordinator.get_state(), MachineState::RUNNING);
+    EXPECT_EQ(coordinator.get_error(), MachineError::NONE);
+}
+
+TEST_F(PanelControllerTest, VeryLongClickInErrorCancelsCycleToIdle)
+{
+    panel_ctrl.init();
+
+    // Start cycle
+    EXPECT_CALL(btn_start, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+    panel_ctrl.update();
+
+    // Cause fill timeout (5000ms)
+    ON_CALL(mock_timer, get_time_ms()).WillByDefault(Return(10000));
+    coordinator.update();
+    panel_ctrl.update();
+
+    EXPECT_EQ(coordinator.get_state(), MachineState::ERROR);
+
+    // Very long click while in ERROR:
+    // Should call coordinator.stop_cycle(), play double beep, and return to IDLE
+    EXPECT_CALL(buzzer, play_pattern(BuzzerPattern::DOUBLE_BEEP)).Times(1);
+    EXPECT_CALL(btn_start, get_last_click())
+        .WillOnce(Return(ButtonClickType::VERY_LONG_CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+
+    panel_ctrl.update();
+    EXPECT_EQ(coordinator.get_state(), MachineState::IDLE);
+    EXPECT_EQ(coordinator.get_error(), MachineError::NONE);
+}
