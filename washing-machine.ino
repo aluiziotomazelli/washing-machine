@@ -9,29 +9,20 @@
 #include "src/hal/pressure_switch_sensor.hpp"
 #include "src/ui/button.hpp"
 #include "src/ui/buzzer.hpp"
-#include "src/hal/ws2812_strip.hpp"
 #include "src/ui/interfaces/i_button.hpp"
-#include "src/ui/strip_led_panel.hpp"
+#include "src/ui/discrete_led_panel.hpp"
 #include "src/controllers/fill_controller.hpp"
 #include "src/controllers/agitator.hpp"
 #include "src/controllers/drain_controller.hpp"
 #include "src/controllers/spin_controller.hpp"
-#include "src/controllers/vibration_monitor.hpp"
 #include "src/fsm/wash_cycle_coordinator.hpp"
 #include "src/ui/diagnostic_controller.hpp"
 #include "src/ui/panel_controller.hpp"
-#include "src/hal/arduino/arduino_i2c_hal.hpp"
-#include "src/hal/mpu6050.hpp"
 
 // Hardware Abstraction Layer instances:
 static hal::ArduinoGpioHAL gpio_hal;
 static hal::ArduinoTimerHAL timer_hal;
 static hal::ArduinoWatchdogHAL watchdog_hal;
-static hal::ArduinoI2cHAL i2c_hal;
-
-// Accelerometer Sensor & Vibration Monitor:
-static hal::Mpu6050 accel_sensor(i2c_hal);
-static controllers::VibrationMonitor vib_monitor(accel_sensor, timer_hal);
 
 // UI Hardware Components:
 static ui::ButtonConfig btn_cfg{
@@ -58,9 +49,17 @@ static hal::PressureSwitchSensor water_level_sensor(gpio_hal, timer_hal, pressur
 
 static ui::Buzzer buzzer(gpio_hal, timer_hal, config::k_buzzer_pin, 3000);
 
-// Addressable RGB LED Strip Panel (9 Pixels WS2812B)
-static hal::Ws2812Strip led_strip(config::k_led_strip_pin, 9);
-static ui::StripLedPanel led_panel(led_strip, timer_hal);
+// Discrete Indicator LED Panel (Legacy / Discrete Hardware)
+static ui::DiscreteLedPins led_pins{
+    config::k_led_power_pin,
+    config::k_led_softener_pin,
+    config::k_led_wash_pin,
+    config::k_led_rinse_pin,
+    config::k_led_spin_pin,
+    config::k_led_level_low_pin,
+    config::k_led_level_med_pin
+};
+static ui::DiscreteLedPanel led_panel(gpio_hal, timer_hal, led_pins);
 
 // Actuators:
 static hal::DigitalOutput valve_main(gpio_hal, config::k_valve_main_pin);
@@ -72,7 +71,7 @@ static hal::ReversibleMotor motor(gpio_hal, timer_hal, config::k_motor_cw_pin, c
 static controllers::FillController fill_ctrl(timer_hal, valve_main, valve_softener, water_level_sensor);
 static controllers::Agitator agitator(timer_hal, motor);
 static controllers::DrainController drain_ctrl(timer_hal, drain_pump, water_level_sensor);
-static controllers::SpinController spin_ctrl(timer_hal, drain_pump, motor, controllers::SpinConfig{}, &vib_monitor);
+static controllers::SpinController spin_ctrl(timer_hal, drain_pump, motor);
 
 // Central Cycle Coordinator (FSM):
 static fsm::WashCycleCoordinator coordinator(timer_hal, fill_ctrl, agitator, drain_ctrl, spin_ctrl);
@@ -89,7 +88,7 @@ static ui::DiagnosticController diag_ctrl(
     drain_pump,
     motor,
     timer_hal,
-    &vib_monitor
+    nullptr
 );
 
 // UI Panel Controller:
@@ -122,10 +121,6 @@ void setup()
 
     hal::DigitalOutput::init_all();
     motor.init();
-
-    // Initialize MPU-6050 Accelerometer & Vibration Monitor
-    accel_sensor.init();
-    vib_monitor.init();
 
     // Arm Hardware Watchdog (2-second timeout protection against MCU freeze)
     watchdog_hal.enable(hal::WatchdogTimeout::TIMEOUT_2S);
