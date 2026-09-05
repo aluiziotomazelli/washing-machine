@@ -70,7 +70,6 @@ void SpinController::update()
                 phase_start_ms_ = now;
             }
             else {
-                has_error_ = true;
                 sub_phase_ = SpinSubPhase::STOP_COASTING;
                 phase_start_ms_ = now;
             }
@@ -162,7 +161,11 @@ void SpinController::update()
 
     case SpinSubPhase::STOP_COASTING:
         if (elapsed_in_phase >= config_.coast_down_ms) {
+            bool was_unbalanced = (unbalance_retries_ >= config_.max_unbalance_retries);
             emergency_stop();
+            if (was_unbalanced) {
+                has_error_ = true;
+            }
         }
         break;
 
@@ -262,6 +265,10 @@ void SpinController::stop()
 
     if (sub_phase_ == SpinSubPhase::CLUTCH_ENGAGE || sub_phase_ == SpinSubPhase::PAUSED) {
         emergency_stop();
+        return;
+    }
+
+    if (sub_phase_ == SpinSubPhase::STOP_COASTING) {
         return;
     }
 

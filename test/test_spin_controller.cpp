@@ -338,7 +338,8 @@ TEST_F(SpinControllerTest, UnbalanceTripExhaustingRetriesEntersStopCoastingAndFl
     spin_with_vib.update();
 
     EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::STOP_COASTING);
-    EXPECT_TRUE(spin_with_vib.has_error());
+    EXPECT_FALSE(spin_with_vib.has_error());
+    EXPECT_TRUE(spin_with_vib.is_active());
 
     // Finish coast-down to safe complete stop
     simulated_time_ms += 2000;
@@ -373,6 +374,12 @@ TEST_F(SpinControllerTest, NewStartResetsRetriesAndError)
     EXPECT_CALL(mock_vib, update()).Times(1);
     EXPECT_CALL(mock_vib, is_critical_unbalance()).WillOnce(Return(true));
     spin_with_vib.update();
+    EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::STOP_COASTING);
+
+    // Complete coast-down
+    simulated_time_ms += 2000;
+    EXPECT_CALL(mock_drain_pump, turn_off()).Times(1);
+    spin_with_vib.update();
     EXPECT_TRUE(spin_with_vib.has_error());
 
     // Re-start clears error and retry counter
@@ -404,6 +411,12 @@ TEST_F(SpinControllerTest, ResetErrorExplicitlyClearsErrorAndRetries)
     spin_with_vib.update();
     EXPECT_CALL(mock_vib, update()).Times(1);
     EXPECT_CALL(mock_vib, is_critical_unbalance()).WillOnce(Return(true));
+    spin_with_vib.update();
+    EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::STOP_COASTING);
+
+    // Complete coast-down
+    simulated_time_ms += 2000;
+    EXPECT_CALL(mock_drain_pump, turn_off()).Times(1);
     spin_with_vib.update();
     EXPECT_TRUE(spin_with_vib.has_error());
 
