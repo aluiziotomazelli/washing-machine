@@ -473,3 +473,20 @@ TEST_F(DiagnosticControllerTest, InactiveControllerIgnoresUpdates)
 
     diag_ctrl.update();
 }
+
+TEST_F(DiagnosticControllerTest, SkipsLedPanelShowWhenBuzzerIsPlaying)
+{
+    diag_ctrl.enter();
+
+    // When buzzer is playing audio, show_diagnostic is skipped to avoid interrupt collision
+    EXPECT_CALL(buzzer, is_playing()).WillRepeatedly(Return(true));
+    EXPECT_CALL(led_panel, show_diagnostic(_, _, _)).Times(0);
+
+    diag_ctrl.update();
+
+    // When buzzer finishes, show_diagnostic renders normally
+    EXPECT_CALL(buzzer, is_playing()).WillRepeatedly(Return(false));
+    EXPECT_CALL(led_panel, show_diagnostic(DiagnosticStep::LEVEL_SENSOR, _, _)).Times(1);
+
+    diag_ctrl.update();
+}

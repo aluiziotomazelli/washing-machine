@@ -130,12 +130,14 @@ void DiagnosticController::update()
 
 void DiagnosticController::update_level_sensor_test()
 {
-    domain::WaterLevel current_level = water_sensor_.get_current_level();
-    led_panel_.show_diagnostic(
-        DiagnosticStep::LEVEL_SENSOR,
-        static_cast<uint16_t>(current_level),
-        true
-    );
+    if (!buzzer_.is_playing()) {
+        domain::WaterLevel current_level = water_sensor_.get_current_level();
+        led_panel_.show_diagnostic(
+            DiagnosticStep::LEVEL_SENSOR,
+            static_cast<uint16_t>(current_level),
+            true
+        );
+    }
 }
 
 void DiagnosticController::update_vibration_sensor_test()
@@ -147,11 +149,13 @@ void DiagnosticController::update_vibration_sensor_test()
         vib = vib_monitor_->get_vibration();
         ok = vib_monitor_->is_sensor_ok();
     }
-    led_panel_.show_diagnostic(
-        DiagnosticStep::VIBRATION_SENSOR,
-        vib,
-        ok
-    );
+    if (!buzzer_.is_playing()) {
+        led_panel_.show_diagnostic(
+            DiagnosticStep::VIBRATION_SENSOR,
+            vib,
+            ok
+        );
+    }
 }
 
 void DiagnosticController::update_main_valve_test(ButtonClickType start_click)
@@ -174,11 +178,13 @@ void DiagnosticController::update_main_valve_test(ButtonClickType start_click)
     }
     valve_softener_.turn_off();
 
-    led_panel_.show_diagnostic(
-        DiagnosticStep::MAIN_VALVE,
-        valve_active_ ? 1 : 0,
-        true
-    );
+    if (!buzzer_.is_playing()) {
+        led_panel_.show_diagnostic(
+            DiagnosticStep::MAIN_VALVE,
+            valve_active_ ? 1 : 0,
+            true
+        );
+    }
 }
 
 void DiagnosticController::update_softener_valve_test(ButtonClickType start_click)
@@ -201,11 +207,13 @@ void DiagnosticController::update_softener_valve_test(ButtonClickType start_clic
         valve_softener_.turn_off();
     }
 
-    led_panel_.show_diagnostic(
-        DiagnosticStep::SOFTENER_VALVE,
-        valve_active_ ? 1 : 0,
-        true
-    );
+    if (!buzzer_.is_playing()) {
+        led_panel_.show_diagnostic(
+            DiagnosticStep::SOFTENER_VALVE,
+            valve_active_ ? 1 : 0,
+            true
+        );
+    }
 }
 
 void DiagnosticController::update_drain_pump_test(ButtonClickType start_click)
@@ -221,12 +229,14 @@ void DiagnosticController::update_drain_pump_test(ButtonClickType start_click)
         drain_pump_.turn_off();
     }
 
-    domain::WaterLevel current_level = water_sensor_.get_current_level();
-    led_panel_.show_diagnostic(
-        DiagnosticStep::DRAIN_PUMP,
-        static_cast<uint16_t>(current_level),
-        pump_active_
-    );
+    if (!buzzer_.is_playing()) {
+        domain::WaterLevel current_level = water_sensor_.get_current_level();
+        led_panel_.show_diagnostic(
+            DiagnosticStep::DRAIN_PUMP,
+            static_cast<uint16_t>(current_level),
+            pump_active_
+        );
+    }
 }
 
 void DiagnosticController::update_motor_agitate_test(ButtonClickType start_click)
@@ -245,12 +255,14 @@ void DiagnosticController::update_motor_agitate_test(ButtonClickType start_click
     }
     motor_.update();
 
-    hal::MotorState state = motor_.get_state();
-    led_panel_.show_diagnostic(
-        DiagnosticStep::MOTOR_AGITATE,
-        static_cast<uint16_t>(state),
-        true
-    );
+    if (!buzzer_.is_playing()) {
+        hal::MotorState state = motor_.get_state();
+        led_panel_.show_diagnostic(
+            DiagnosticStep::MOTOR_AGITATE,
+            static_cast<uint16_t>(state),
+            true
+        );
+    }
 }
 
 void DiagnosticController::update_spin_test(ButtonClickType start_click)
@@ -295,19 +307,21 @@ void DiagnosticController::update_spin_test(ButtonClickType start_click)
 
     motor_.update();
 
-    uint16_t raw_value = 0;
-    if (drain_pump_.is_on()) {
-        raw_value |= 0x01;
-    }
-    if (motor_.get_state() == hal::MotorState::RUNNING_CLOCKWISE) {
-        raw_value |= 0x02;
-    }
+    if (!buzzer_.is_playing()) {
+        uint16_t raw_value = 0;
+        if (drain_pump_.is_on()) {
+            raw_value |= 0x01;
+        }
+        if (motor_.get_state() == hal::MotorState::RUNNING_CLOCKWISE) {
+            raw_value |= 0x02;
+        }
 
-    led_panel_.show_diagnostic(
-        DiagnosticStep::SPIN_TEST,
-        raw_value,
-        !spin_tripped_
-    );
+        led_panel_.show_diagnostic(
+            DiagnosticStep::SPIN_TEST,
+            raw_value,
+            !spin_tripped_
+        );
+    }
 }
 
 } // namespace ui

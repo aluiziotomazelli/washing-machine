@@ -10,7 +10,7 @@ An industrial-grade, open-source custom controller firmware for domestic top-loa
 
 ---
 
-## 🌟 Key Features
+## Key Features
 
 * **Event-Driven Non-Blocking State Machine**: Zero `delay()` calls or blocking loops throughout the entire codebase. Every process runs concurrently with predictable timing.
 * **Real-Time Out-of-Balance Sensing**: 50 Hz digital signal processing on the I2C bus via an MPU-6050 accelerometer with gravity offset rejection and peak-to-peak envelope windowing.
@@ -28,7 +28,7 @@ An industrial-grade, open-source custom controller firmware for domestic top-loa
 
 ---
 
-## 📐 Hardware Pinout Reference
+## Hardware Pinout Reference
 
 Pin assignments configured in [`src/hal/pinout.hpp`](src/hal/pinout.hpp) for the ATmega328P:
 
@@ -53,7 +53,7 @@ Pin assignments configured in [`src/hal/pinout.hpp`](src/hal/pinout.hpp) for the
 
 ---
 
-## 🧭 Codebase Architecture & Key Files
+## Codebase Architecture & Key Files
 
 The codebase adheres strictly to SOLID principles, dependency injection, and clean separation between domain logic and hardware abstractions:
 
@@ -74,7 +74,7 @@ washing-machine/
 │   ├── hal/                             # Hardware Abstraction Layer (HAL)
 │   │   ├── pinout.hpp                   # Physical GPIO and peripheral pinout definitions
 │   │   ├── digital_output.hpp           # Actuator driver with initial-state safety
-│   │   ├── reversible_motor.hpp         # Interlocked motor driver with 50 ms anti-shoot-through dead-time
+│   │   ├── reversible_motor.hpp         # Interlocked motor driver with 200 ms anti-shoot-through dead-time
 │   │   ├── pressure_switch_sensor.hpp   # 3-level debounced electromechanical pressure switch reader
 │   │   ├── mpu6050.hpp                  # Low-overhead I2C accelerometer driver with auto-detection
 │   │   └── ws2812_strip.hpp             # Handcrafted AVR assembly 800 kHz zero-heap WS2812B driver
@@ -92,7 +92,7 @@ washing-machine/
 
 ---
 
-## 🕹️ Wash Programs & Controls
+## Wash Programs & Controls
 
 ### Programs
 1. **Normal Wash**: Main Fill $\rightarrow$ 18 min Agitation $\rightarrow$ Drain $\rightarrow$ Rinse $\rightarrow$ Final Spin (4 min).
@@ -113,7 +113,7 @@ washing-machine/
 
 ---
 
-## 🛠️ How to Build, Test & Flash
+## How to Build, Test & Flash
 
 ### On Linux / macOS (Recommended CLI Toolchain)
 
@@ -143,7 +143,7 @@ make compile-db
 
 ---
 
-## 📚 Deep-Dive Documentation
+## Deep-Dive Documentation
 
 * 📖 [**Architectural Case Study (`docs/case-study.md`)**](docs/case-study.md) — The complete engineering journey: memory optimization, hardware watchdog integration, out-of-balance DSP math, and refactoring timeline.
 * 🛠️ [**Field Service Technical Manual (`docs/technical-manual.md`)**](docs/technical-manual.md) — Diagnostic step-by-step procedures, LED color codes, actuator test procedures, and troubleshooting charts.
