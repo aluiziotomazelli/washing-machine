@@ -88,21 +88,21 @@ TEST_F(PanelControllerTest, CyclesProgramsInIdleMode)
     panel_ctrl.update();
     EXPECT_EQ(panel_ctrl.get_selected_program(), WashProgram::SPIN_ONLY);
 
-    // 2nd click: SPIN_ONLY -> NORMAL_WASH
-    EXPECT_CALL(btn_program, get_last_click()).WillOnce(Return(ButtonClickType::CLICK));
-    EXPECT_CALL(led_panel, set_program(WashProgram::NORMAL_WASH)).Times(1);
-    EXPECT_CALL(buzzer, beep(50)).Times(1);
-    panel_ctrl.update();
-    EXPECT_EQ(panel_ctrl.get_selected_program(), WashProgram::NORMAL_WASH);
-
-    // 3rd click: NORMAL_WASH -> HEAVY_WASH
+    // 2nd click: SPIN_ONLY -> HEAVY_WASH
     EXPECT_CALL(btn_program, get_last_click()).WillOnce(Return(ButtonClickType::CLICK));
     EXPECT_CALL(led_panel, set_program(WashProgram::HEAVY_WASH)).Times(1);
     EXPECT_CALL(buzzer, beep(50)).Times(1);
     panel_ctrl.update();
     EXPECT_EQ(panel_ctrl.get_selected_program(), WashProgram::HEAVY_WASH);
 
-    // 4th click: HEAVY_WASH -> RINSE_ONLY
+    // 3rd click: HEAVY_WASH -> NORMAL_WASH
+    EXPECT_CALL(btn_program, get_last_click()).WillOnce(Return(ButtonClickType::CLICK));
+    EXPECT_CALL(led_panel, set_program(WashProgram::NORMAL_WASH)).Times(1);
+    EXPECT_CALL(buzzer, beep(50)).Times(1);
+    panel_ctrl.update();
+    EXPECT_EQ(panel_ctrl.get_selected_program(), WashProgram::NORMAL_WASH);
+
+    // 4th click: NORMAL_WASH -> RINSE_ONLY
     EXPECT_CALL(btn_program, get_last_click()).WillOnce(Return(ButtonClickType::CLICK));
     EXPECT_CALL(led_panel, set_program(WashProgram::RINSE_ONLY)).Times(1);
     EXPECT_CALL(buzzer, beep(50)).Times(1);
@@ -123,7 +123,7 @@ TEST_F(PanelControllerTest, IgnoresProgramClickWhenRunning)
     EXPECT_EQ(panel_ctrl.get_selected_program(), WashProgram::RINSE_ONLY);
 }
 
-TEST_F(PanelControllerTest, TogglesWaterLevelInIdle)
+TEST_F(PanelControllerTest, CyclesWaterLevelInIdle)
 {
     panel_ctrl.init();
 
@@ -134,7 +134,14 @@ TEST_F(PanelControllerTest, TogglesWaterLevelInIdle)
     panel_ctrl.update();
     EXPECT_EQ(panel_ctrl.get_selected_level(), WaterLevel::MEDIUM_LEVEL);
 
-    // 2nd click: MEDIUM_LEVEL -> LOW_LEVEL
+    // 2nd click: MEDIUM_LEVEL -> HIGH_LEVEL
+    EXPECT_CALL(btn_level, get_last_click()).WillOnce(Return(ButtonClickType::CLICK));
+    EXPECT_CALL(led_panel, set_selected_level(WaterLevel::HIGH_LEVEL)).Times(1);
+    EXPECT_CALL(buzzer, beep(50)).Times(1);
+    panel_ctrl.update();
+    EXPECT_EQ(panel_ctrl.get_selected_level(), WaterLevel::HIGH_LEVEL);
+
+    // 3rd click: HIGH_LEVEL -> LOW_LEVEL
     EXPECT_CALL(btn_level, get_last_click()).WillOnce(Return(ButtonClickType::CLICK));
     EXPECT_CALL(led_panel, set_selected_level(WaterLevel::LOW_LEVEL)).Times(1);
     EXPECT_CALL(buzzer, beep(50)).Times(1);

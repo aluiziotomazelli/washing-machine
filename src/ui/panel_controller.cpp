@@ -123,10 +123,10 @@ void PanelController::handle_program_click()
     }
 
     switch (selected_program_) {
-    case domain::WashProgram::NORMAL_WASH:
-        selected_program_ = domain::WashProgram::HEAVY_WASH;
-        break;
     case domain::WashProgram::HEAVY_WASH:
+        selected_program_ = domain::WashProgram::NORMAL_WASH;
+        break;
+    case domain::WashProgram::NORMAL_WASH:
         selected_program_ = domain::WashProgram::RINSE_ONLY;
         break;
     case domain::WashProgram::RINSE_ONLY:
@@ -134,7 +134,7 @@ void PanelController::handle_program_click()
         break;
     case domain::WashProgram::SPIN_ONLY:
     default:
-        selected_program_ = domain::WashProgram::NORMAL_WASH;
+        selected_program_ = domain::WashProgram::HEAVY_WASH;
         break;
     }
 
@@ -154,12 +154,18 @@ void PanelController::handle_water_level_click()
         sync_state_with_coordinator();
     }
 
-    // Toggle between LOW_LEVEL and MEDIUM_LEVEL (HIGH_LEVEL is disabled on this PCB)
-    if (selected_level_ == domain::WaterLevel::LOW_LEVEL) {
+    // Cycle between LOW_LEVEL, MEDIUM_LEVEL, and HIGH_LEVEL
+    switch (selected_level_) {
+    case domain::WaterLevel::LOW_LEVEL:
         selected_level_ = domain::WaterLevel::MEDIUM_LEVEL;
-    }
-    else {
+        break;
+    case domain::WaterLevel::MEDIUM_LEVEL:
+        selected_level_ = domain::WaterLevel::HIGH_LEVEL;
+        break;
+    case domain::WaterLevel::HIGH_LEVEL:
+    default:
         selected_level_ = domain::WaterLevel::LOW_LEVEL;
+        break;
     }
 
     led_panel_.set_selected_level(selected_level_);
