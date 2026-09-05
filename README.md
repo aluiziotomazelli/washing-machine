@@ -1,7 +1,7 @@
 # Clean C++ Washing Machine Controller
 
 [![CI - Host Tests & Firmware Build](https://github.com/aluiziotomazelli/washing-machine/actions/workflows/ci.yml/badge.svg)](https://github.com/aluiziotomazelli/washing-machine/actions/workflows/ci.yml)
-[![Unit Tests](https://img.shields.io/badge/tests-172%20passed-brightgreen)](https://github.com/aluiziotomazelli/washing-machine)
+[![Unit Tests](https://img.shields.io/badge/tests-173%20passed-brightgreen)](https://github.com/aluiziotomazelli/washing-machine)
 [![Heap Allocation](https://img.shields.io/badge/heap-0%20bytes-blue)](https://github.com/aluiziotomazelli/washing-machine)
 [![Target](https://img.shields.io/badge/target-ATmega328P%20%2F%2016MHz-orange)](https://github.com/aluiziotomazelli/washing-machine)
 [![Coverage Report](https://img.shields.io/badge/coverage-report-blue)](https://aluiziotomazelli.github.io/washing-machine/index.html)
@@ -23,7 +23,7 @@ An industrial-grade, open-source custom controller firmware for domestic top-loa
   * **`main` branch**: WS2812B 9-pixel Addressable RGB LED strip with smooth breathing animations.
   * **`discrete-leds` branch**: Classical discrete LED panel board pinout.
 * **Zero Dynamic Memory (0 Bytes Heap)**: Deterministic execution with zero heap fragmentation risk.
-* **Dual-Target Native PC Unit Testing**: 172 unit tests written in GoogleTest/GoogleMock executing in ~45 ms on PC.
+* **Dual-Target Native PC Unit Testing**: 173 unit tests written in GoogleTest/GoogleMock executing in ~45 ms on PC.
 * **Hardware Watchdog Protection**: AVR hardware WDT with early boot disarm (`.init3`), continuous runtime kicking, and reboot detection with buzzer acoustic alerts.
 
 ---
@@ -140,6 +140,23 @@ make compile-db
 1. Open [`washing-machine.ino`](washing-machine.ino) in the Arduino IDE.
 2. Select Board: **Arduino Pro or Pro Mini** (Processor: **ATmega328P, 5V, 16 MHz**).
 3. Click **Verify** / **Upload**.
+
+---
+
+## 🔮 Future Roadmap & Planned Features
+
+While the core firmware is production-ready and fully operational, the following enhancements are planned for future releases:
+
+* **EEPROM Power-Loss Recovery & State Persistence**:
+  * Periodically snapshot active cycle state, program, level, and running flags to non-volatile EEPROM.
+  * Automatically resume interrupted wash cycles after power outages upon AC mains restoration.
+  * Restore the last user-selected program and level on boot instead of defaulting to Normal Wash.
+* **Energy-Saving Auto-Standby Mode**:
+  * Dim or extinguish panel LEDs after 10 minutes of inactivity in `IDLE` state.
+  * Instantly wake the UI on any button interaction.
+* **Silent / Night Mode (Mute Buzzer)**:
+  * Toggle acoustic alerts (e.g. via long press on the Softener button) for night-time wash operations.
+  * Persist mute preference in EEPROM.
 
 ---
 
