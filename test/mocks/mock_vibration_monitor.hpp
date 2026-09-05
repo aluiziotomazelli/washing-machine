@@ -14,6 +14,7 @@ public:
     MOCK_METHOD(bool, is_in_motion, (), (const, override));
     MOCK_METHOD(bool, is_warning, (), (const, override));
     MOCK_METHOD(bool, is_critical_unbalance, (), (const, override));
+    MOCK_METHOD(bool, is_sensor_ok, (), (const, override));
     MOCK_METHOD(void, reset, (), (override));
 };
 

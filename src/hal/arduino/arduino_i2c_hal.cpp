@@ -42,9 +42,13 @@ bool ArduinoI2cHAL::read_bytes(uint8_t dev_addr, uint8_t reg_addr, uint8_t* buff
 
     Wire.beginTransmission(dev_addr);
     Wire.write(reg_addr);
-    // Send repeated start (sendStop = false)
+    // Try repeated start first (sendStop = false); fallback to standard stop if rejected
     if (Wire.endTransmission(false) != 0) {
-        return false;
+        Wire.beginTransmission(dev_addr);
+        Wire.write(reg_addr);
+        if (Wire.endTransmission(true) != 0) {
+            return false;
+        }
     }
 
     uint8_t received = Wire.requestFrom(dev_addr, static_cast<uint8_t>(len));

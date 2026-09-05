@@ -54,6 +54,7 @@ public:
     void set_stage(WashStage stage) override;
     void set_selected_level(WaterLevel level) override;
     void turn_off_all() override;
+    void show_diagnostic(DiagnosticStep step, uint16_t raw_value = 0, bool status_ok = true) override;
 
 private:
     void write_pin(uint8_t pin, bool state);

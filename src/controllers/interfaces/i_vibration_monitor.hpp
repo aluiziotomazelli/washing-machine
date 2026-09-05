@@ -54,6 +54,12 @@ public:
     virtual bool is_critical_unbalance() const = 0;
 
     /**
+     * @brief Whether the physical accelerometer sensor is communicating and healthy.
+     * @return true if communication is healthy, false on bus error or disconnected sensor.
+     */
+    virtual bool is_sensor_ok() const = 0;
+
+    /**
      * @brief Reset trip and warning flags, and clear sampling buffer.
      */
     virtual void reset() = 0;

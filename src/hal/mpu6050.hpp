@@ -42,11 +42,13 @@ public:
 
     uint8_t get_device_address() const { return dev_addr_; }
     AccelScale get_scale() const { return scale_; }
+    bool is_initialized() const { return is_initialized_; }
 
 private:
     II2cHAL& i2c_;
     uint8_t dev_addr_;
     AccelScale scale_;
+    bool is_initialized_{false};
 };
 
 } // namespace hal

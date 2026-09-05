@@ -290,9 +290,9 @@ TEST_F(WashCycleCoordinatorTest, TransitionsToUnbalancedLoadErrorAndResumes)
     simulated_time_ms += 200; coordinator.update();
     simulated_time_ms += 100; coordinator.update();
 
-    // Trip 3 (exhausts 2 dry retries) -> SpinController sets has_error = true
-    simulated_time_ms += 50;
-    coordinator.update();
+    // Trip 3 (exhausts 2 dry retries) -> enters STOP_COASTING (200ms) -> completes and transitions to RECOVERY_FILL
+    simulated_time_ms += 50;  coordinator.update();
+    simulated_time_ms += 200; coordinator.update();
 
     // Coordinator intercepts spin error and starts hydraulic recovery!
     EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::RECOVERY_FILL);
@@ -344,7 +344,8 @@ TEST_F(WashCycleCoordinatorTest, HydraulicRecoveryExhaustionLatchesUnbalancedLoa
     simulated_time_ms += 50;  coordinator.update();
     simulated_time_ms += 200; coordinator.update();
     simulated_time_ms += 100; coordinator.update();
-    simulated_time_ms += 50;  coordinator.update(); // triggers RECOVERY_FILL
+    simulated_time_ms += 50;  coordinator.update();
+    simulated_time_ms += 200; coordinator.update(); // triggers RECOVERY_FILL
 
     EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::RECOVERY_FILL);
 
@@ -368,7 +369,8 @@ TEST_F(WashCycleCoordinatorTest, HydraulicRecoveryExhaustionLatchesUnbalancedLoa
     simulated_time_ms += 50;  coordinator.update();
     simulated_time_ms += 200; coordinator.update();
     simulated_time_ms += 100; coordinator.update();
-    simulated_time_ms += 50;  coordinator.update(); // dry retries exhausted again!
+    simulated_time_ms += 50;  coordinator.update();
+    simulated_time_ms += 200; coordinator.update(); // dry retries exhausted again -> complete coast down
 
     // Since hydraulic recovery was already attempted once, it now latches ERROR!
     EXPECT_EQ(coordinator.get_state(), domain::MachineState::ERROR);
@@ -407,6 +409,7 @@ TEST_F(WashCycleCoordinatorTest, NoRecoveryWhenMaxRecoveriesIsZero)
     simulated_time_ms += 200; direct_coord.update();
     simulated_time_ms += 100; direct_coord.update();
     simulated_time_ms += 50;  direct_coord.update();
+    simulated_time_ms += 200; direct_coord.update();
 
     // Immediately trips to ERROR without hydraulic recovery
     EXPECT_EQ(direct_coord.get_state(), domain::MachineState::ERROR);

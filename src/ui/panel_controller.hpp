@@ -7,7 +7,13 @@
 #include "interfaces/i_buzzer.hpp"
 #include "../fsm/wash_cycle_coordinator.hpp"
 
+namespace hal {
+class ITimerHAL;
+}
+
 namespace ui {
+
+class DiagnosticController;
 
 /**
  * @class PanelController
@@ -16,6 +22,8 @@ namespace ui {
  */
 class PanelController {
 public:
+    static constexpr uint32_t k_diag_trigger_hold_ms{2500};
+
     PanelController(
         IButton& btn_start_pause,
         IButton& btn_program,
@@ -23,7 +31,9 @@ public:
         IButton& btn_softener,
         ILedPanel& led_panel,
         IBuzzer& buzzer,
-        fsm::WashCycleCoordinator& coordinator
+        fsm::WashCycleCoordinator& coordinator,
+        DiagnosticController* diag_ctrl = nullptr,
+        hal::ITimerHAL* timer_hal = nullptr
     );
 
     void init();
@@ -32,6 +42,7 @@ public:
     domain::WashProgram get_selected_program() const { return selected_program_; }
     domain::WaterLevel get_selected_level() const { return selected_level_; }
     bool is_softener_enabled() const { return softener_enabled_; }
+    bool is_diagnostic_active() const;
 
 private:
     void handle_start_pause_click(ButtonClickType click);
@@ -47,10 +58,13 @@ private:
     ILedPanel& led_panel_;
     IBuzzer& buzzer_;
     fsm::WashCycleCoordinator& coordinator_;
+    DiagnosticController* diag_ctrl_{nullptr};
+    hal::ITimerHAL* timer_hal_{nullptr};
 
     domain::WashProgram selected_program_{domain::WashProgram::NORMAL_WASH};
     domain::WaterLevel selected_level_{domain::WaterLevel::LOW_LEVEL};
     bool softener_enabled_{false};
+    uint32_t diag_entry_press_start_ms_{0};
 
     domain::MachineState prev_state_{domain::MachineState::IDLE};
     domain::WashStage prev_stage_{domain::WashStage::IDLE};

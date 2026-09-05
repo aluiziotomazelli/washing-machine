@@ -13,6 +13,16 @@ class Mpu6050Test : public ::testing::Test {
 protected:
     NiceMock<mocks::MockI2cHAL> mock_i2c;
     hal::Mpu6050 mpu{mock_i2c, 0x68, hal::AccelScale::SCALE_4G};
+
+    void init_mpu() {
+        uint8_t who_am_i_val = 0x68;
+        EXPECT_CALL(mock_i2c, read_bytes(0x68, 0x75, _, 1))
+            .WillOnce(DoAll(SetArrayArgument<2>(&who_am_i_val, &who_am_i_val + 1), Return(true)));
+        EXPECT_CALL(mock_i2c, write_reg(0x68, 0x6B, 0x00)).WillOnce(Return(true));
+        EXPECT_CALL(mock_i2c, write_reg(0x68, 0x1A, 0x03)).WillOnce(Return(true));
+        EXPECT_CALL(mock_i2c, write_reg(0x68, 0x1C, 0x08)).WillOnce(Return(true));
+        ASSERT_TRUE(mpu.init());
+    }
 };
 
 TEST_F(Mpu6050Test, InitializesSuccessfullyWhenWhoAmIMatchesAndWritesRegisters)
@@ -36,10 +46,12 @@ TEST_F(Mpu6050Test, InitializesSuccessfullyWhenWhoAmIMatchesAndWritesRegisters)
 
 TEST_F(Mpu6050Test, FailsInitializationWhenWhoAmIReturnsIncorrectDeviceSignature)
 {
-    // Returns 0x72 instead of 0x68
-    uint8_t wrong_id = 0x72;
+    // Returns 0x55 (invalid device ID) on both 0x68 and 0x69
+    uint8_t wrong_id = 0x55;
     EXPECT_CALL(mock_i2c, read_bytes(0x68, 0x75, _, 1))
         .WillOnce(DoAll(SetArrayArgument<2>(&wrong_id, &wrong_id + 1), Return(true)));
+    EXPECT_CALL(mock_i2c, read_bytes(0x69, 0x75, _, 1))
+        .WillOnce(Return(false));
 
     EXPECT_FALSE(mpu.init());
 }
@@ -58,6 +70,8 @@ TEST_F(Mpu6050Test, FailsInitializationWhenWakeupWriteFails)
 
 TEST_F(Mpu6050Test, ReadsAccelerationAndCorrectlyAssembles16BitSignedValues)
 {
+    init_mpu();
+
     // X = 0x0100 (256), Y = 0x0200 (512), Z = 0x2000 (8192, 1g at ±4g)
     uint8_t raw_data[6] = {0x01, 0x00, 0x02, 0x00, 0x20, 0x00};
 
@@ -74,6 +88,8 @@ TEST_F(Mpu6050Test, ReadsAccelerationAndCorrectlyAssembles16BitSignedValues)
 
 TEST_F(Mpu6050Test, HandlesNegativeAccelerationValuesInTwoComplementCorrectly)
 {
+    init_mpu();
+
     // X = -1 (0xFFFF), Y = -500 (0xFE0C), Z = -8192 (0xE000)
     uint8_t raw_data[6] = {0xFF, 0xFF, 0xFE, 0x0C, 0xE0, 0x00};
 
@@ -90,6 +106,8 @@ TEST_F(Mpu6050Test, HandlesNegativeAccelerationValuesInTwoComplementCorrectly)
 
 TEST_F(Mpu6050Test, ReturnsFalseAndLeavesOutputVectorUntouchedOnI2cReadFailure)
 {
+    init_mpu();
+
     // I2C communication fails (NACK or timeout)
     EXPECT_CALL(mock_i2c, read_bytes(0x68, 0x3B, _, 6)).WillOnce(Return(false));
 
@@ -100,4 +118,26 @@ TEST_F(Mpu6050Test, ReturnsFalseAndLeavesOutputVectorUntouchedOnI2cReadFailure)
     EXPECT_EQ(accel.x, 10);
     EXPECT_EQ(accel.y, 20);
     EXPECT_EQ(accel.z, 30);
+}
+
+TEST_F(Mpu6050Test, AutoInitializesOnReadAccelWhenNotExplicitlyInitialized)
+{
+    // WHO_AM_I on 0x68
+    uint8_t who_am_i_val = 0x68;
+    EXPECT_CALL(mock_i2c, read_bytes(0x68, 0x75, _, 1))
+        .WillOnce(DoAll(SetArrayArgument<2>(&who_am_i_val, &who_am_i_val + 1), Return(true)));
+    EXPECT_CALL(mock_i2c, write_reg(0x68, 0x6B, 0x00)).WillOnce(Return(true));
+    EXPECT_CALL(mock_i2c, write_reg(0x68, 0x1A, 0x03)).WillOnce(Return(true));
+    EXPECT_CALL(mock_i2c, write_reg(0x68, 0x1C, 0x08)).WillOnce(Return(true));
+
+    uint8_t raw_data[6] = {0x00, 0x64, 0x00, 0xC8, 0x01, 0x2C}; // 100, 200, 300
+    EXPECT_CALL(mock_i2c, read_bytes(0x68, 0x3B, _, 6))
+        .WillOnce(DoAll(SetArrayArgument<2>(raw_data, raw_data + 6), Return(true)));
+
+    hal::Vector3 accel;
+    EXPECT_TRUE(mpu.read_accel(accel));
+    EXPECT_EQ(accel.x, 100);
+    EXPECT_EQ(accel.y, 200);
+    EXPECT_EQ(accel.z, 300);
+    EXPECT_TRUE(mpu.is_initialized());
 }

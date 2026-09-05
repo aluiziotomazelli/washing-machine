@@ -40,10 +40,10 @@ struct SprintStep
 
 // Default progressive sprint profile tuned for top-load suspension dynamics
 constexpr SprintStep k_default_sprints[] = {
-    { 4000, 3500 }, // S1: Initial pull & clothing distribution without dying
-    { 5000, 3500 }, // S2: Water expulsion with short pause to prevent coasting resonance
-    { 6000, 4000 }, // S3: Speed ramp & suspension stabilization
-    { 7000, 3000 }  // S4: Cutoff before resonance peak & high-speed handover to cruise
+    {4000, 3500}, // S1: Initial pull & clothing distribution without dying
+    {5000, 3500}, // S2: Water expulsion with short pause to prevent coasting resonance
+    {6000, 4000}, // S3: Speed ramp & suspension stabilization
+    {7000, 3000}  // S4: Cutoff before resonance peak & high-speed handover to cruise
 };
 
 /**
@@ -58,7 +58,7 @@ struct SpinConfig
     uint32_t coast_down_ms{10000};   // 10s drum coast-down before pump off
     const SprintStep* sprints{k_default_sprints};
     uint8_t sprint_count{sizeof(k_default_sprints) / sizeof(k_default_sprints[0])};
-    uint8_t max_unbalance_retries{2}; // Maximum dry redistribution retries before flagging error
+    uint8_t max_unbalance_retries{1}; // Maximum dry redistribution retries before flagging error
 };
 
 /**

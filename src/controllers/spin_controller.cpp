@@ -70,7 +70,6 @@ void SpinController::update()
                 phase_start_ms_ = now;
             }
             else {
-                has_error_ = true;
                 sub_phase_ = SpinSubPhase::STOP_COASTING;
                 phase_start_ms_ = now;
             }
@@ -162,7 +161,11 @@ void SpinController::update()
 
     case SpinSubPhase::STOP_COASTING:
         if (elapsed_in_phase >= config_.coast_down_ms) {
+            bool was_unbalanced = (unbalance_retries_ >= config_.max_unbalance_retries);
             emergency_stop();
+            if (was_unbalanced) {
+                has_error_ = true;
+            }
         }
         break;
 
@@ -218,7 +221,6 @@ void SpinController::pause()
 
     if (sub_phase_ == SpinSubPhase::DUTY_RUN_ON || sub_phase_ == SpinSubPhase::DUTY_RUN_OFF) {
         duty_run_elapsed_before_pause_ms_ += (now - duty_run_start_ms_);
-        resume_target_phase_ = SpinSubPhase::DUTY_RUN_ON;
     }
 
     // Cut motor immediately, but keep pump on for coast-down to protect transmission
@@ -237,6 +239,19 @@ void SpinController::resume()
     drain_pump_.turn_on();
     is_paused_ = false;
 
+    // Reset vibration monitor on resume from standstill
+    if (vibration_monitor_ != nullptr) {
+        vibration_monitor_->reset();
+    }
+
+    // Always restart progressive sprints from Sprint 1 to ensure smooth acceleration
+    current_sprint_idx_ = 0;
+    if (config_.sprints && total_sprints_ > 0) {
+        current_sprint_on_ms_ = config_.sprints[0].on_ms;
+        current_sprint_off_ms_ = config_.sprints[0].off_ms;
+    }
+    resume_target_phase_ = SpinSubPhase::SPRINT_ON;
+
     // Re-engage clutch before spinning motor again
     sub_phase_ = SpinSubPhase::CLUTCH_ENGAGE;
     phase_start_ms_ = now;
@@ -250,6 +265,10 @@ void SpinController::stop()
 
     if (sub_phase_ == SpinSubPhase::CLUTCH_ENGAGE || sub_phase_ == SpinSubPhase::PAUSED) {
         emergency_stop();
+        return;
+    }
+
+    if (sub_phase_ == SpinSubPhase::STOP_COASTING) {
         return;
     }
 

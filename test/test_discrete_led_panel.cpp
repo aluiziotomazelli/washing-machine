@@ -2,6 +2,7 @@
 #include <gmock/gmock.h>
 #include "mocks/mock_gpio_hal.hpp"
 #include "mocks/mock_timer_hal.hpp"
+#include "hal/interfaces/i_reversible_motor.hpp"
 #include "ui/discrete_led_panel.hpp"
 
 using ::testing::_;
@@ -220,4 +221,148 @@ TEST_F(DiscreteLedPanelTest, TurnsOffAllLedsOnPanel)
     EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_LOW)).Times(1);
 
     panel.turn_off_all();
+}
+
+TEST_F(DiscreteLedPanelTest, ShowsLevelSensorDiagnostic)
+{
+    // turn_off_all turns off all pins first
+    EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_softener, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_LOW)).Times(2);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_LOW)).Times(1);
+
+    // Then set_selected_level(MEDIUM) sets med=HIGH and step indicator spin=HIGH
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+
+    panel.show_diagnostic(domain::DiagnosticStep::LEVEL_SENSOR, static_cast<uint16_t>(domain::WaterLevel::MEDIUM_LEVEL), true);
+}
+
+TEST_F(DiscreteLedPanelTest, ShowsVibrationSensorDiagnosticWithLevelLeds)
+{
+    // turn_off_all turns off all pins first
+    EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_softener, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_LOW)).Times(1);
+
+    // Step 2: rinse=HIGH, softener=HIGH (status_ok), vibration=6000 -> lvl_low=HIGH and lvl_med=HIGH
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_softener, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+
+    panel.show_diagnostic(domain::DiagnosticStep::VIBRATION_SENSOR, 6000, true);
+}
+
+TEST_F(DiscreteLedPanelTest, ShowsMainValveDiagnostic)
+{
+    // turn_off_all turns off all pins first
+    EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_softener, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_LOW)).Times(1);
+
+    // Step 3: wash=HIGH, lvl_low=HIGH and lvl_med=HIGH when valve is ON
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+
+    panel.show_diagnostic(domain::DiagnosticStep::MAIN_VALVE, 1, true);
+}
+
+TEST_F(DiscreteLedPanelTest, ShowsSoftenerValveDiagnostic)
+{
+    // turn_off_all turns off all pins first
+    EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_softener, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_LOW)).Times(1);
+
+    // Step 4: wash=HIGH, softener=HIGH when valve is ON
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_softener, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+
+    panel.show_diagnostic(domain::DiagnosticStep::SOFTENER_VALVE, 1, true);
+}
+
+TEST_F(DiscreteLedPanelTest, ShowsDrainPumpDiagnostic)
+{
+    // turn_off_all turns off all pins first
+    EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_softener, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_LOW)).Times(2);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_LOW)).Times(1);
+
+    // Step 5: spin=HIGH (step), softener=HIGH (pump ON), lvl_med=HIGH (level MEDIUM)
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_softener, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+
+    panel.show_diagnostic(domain::DiagnosticStep::DRAIN_PUMP, static_cast<uint16_t>(domain::WaterLevel::MEDIUM_LEVEL), true);
+}
+
+TEST_F(DiscreteLedPanelTest, ShowsMotorAgitateDiagnostic)
+{
+    // turn_off_all turns off all pins first
+    EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_softener, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_LOW)).Times(1);
+
+    // Motor CW: wash=HIGH (step/CCW), spin=HIGH (CW)
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+
+    panel.show_diagnostic(domain::DiagnosticStep::MOTOR_AGITATE, static_cast<uint16_t>(hal::MotorState::RUNNING_CLOCKWISE), true);
+}
+
+TEST_F(DiscreteLedPanelTest, ShowsSpinTestDiagnostic)
+{
+    // 1. Normal running with pump & motor active: spin=HIGH, rinse=HIGH (pump), wash=HIGH (motor)
+    EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_softener, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_LOW)).Times(1);
+
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+
+    panel.show_diagnostic(domain::DiagnosticStep::SPIN_TEST, 0x03, true);
+
+    // 2. Vibration Tripped (status_ok = false): spin=HIGH, softener=HIGH (warning)
+    EXPECT_CALL(mock_gpio, set_level(pin_power, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_softener, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_wash, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_rinse, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_low, hal::GpioLevel::LEVEL_LOW)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_lvl_med, hal::GpioLevel::LEVEL_LOW)).Times(1);
+
+    EXPECT_CALL(mock_gpio, set_level(pin_spin, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+    EXPECT_CALL(mock_gpio, set_level(pin_softener, hal::GpioLevel::LEVEL_HIGH)).Times(1);
+
+    panel.show_diagnostic(domain::DiagnosticStep::SPIN_TEST, 0x00, false);
 }

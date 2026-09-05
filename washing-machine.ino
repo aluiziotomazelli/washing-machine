@@ -18,6 +18,7 @@
 #include "src/controllers/spin_controller.hpp"
 #include "src/controllers/vibration_monitor.hpp"
 #include "src/fsm/wash_cycle_coordinator.hpp"
+#include "src/ui/diagnostic_controller.hpp"
 #include "src/ui/panel_controller.hpp"
 #include "src/hal/arduino/arduino_i2c_hal.hpp"
 #include "src/hal/mpu6050.hpp"
@@ -76,14 +77,36 @@ static controllers::SpinController spin_ctrl(timer_hal, drain_pump, motor, contr
 // Central Cycle Coordinator (FSM):
 static fsm::WashCycleCoordinator coordinator(timer_hal, fill_ctrl, agitator, drain_ctrl, spin_ctrl);
 
+// Diagnostic Controller:
+static ui::DiagnosticController diag_ctrl(
+    btn_start,
+    btn_program,
+    led_panel,
+    buzzer,
+    water_level_sensor,
+    valve_main,
+    valve_softener,
+    drain_pump,
+    motor,
+    timer_hal,
+    &vib_monitor
+);
+
 // UI Panel Controller:
-static ui::PanelController panel_ctrl(btn_start, btn_program, btn_level, btn_softener, led_panel, buzzer, coordinator);
+static ui::PanelController panel_ctrl(
+    btn_start,
+    btn_program,
+    btn_level,
+    btn_softener,
+    led_panel,
+    buzzer,
+    coordinator,
+    &diag_ctrl,
+    &timer_hal
+);
 
 void setup()
 {
-    // Serial port for live telemetry (Arduino Serial Plotter compatible)
-    Serial.begin(115200);
-
     // Check if recovery from hardware watchdog reset occurred
     bool recovered_from_wdt = watchdog_hal.was_reset_by_watchdog();
 
@@ -124,29 +147,10 @@ void loop()
     motor.update();
 
     // Process & UI coordination
-    coordinator.update();
-    panel_ctrl.update();
-
-    // 50 Hz (every 20 ms) Live Telemetry for Arduino Serial Plotter
-    static uint32_t last_telemetry_ms = 0;
-    uint32_t now = timer_hal.get_time_ms();
-    if (now - last_telemetry_ms >= 20) {
-        last_telemetry_ms = now;
-
-        // Sample vibration monitor if spin controller is not actively sampling it
-        if (!spin_ctrl.is_active()) {
-            vib_monitor.update();
-        }
-
-        const hal::Vector3& accel = vib_monitor.get_last_sample();
-
-        // Output format: X:val Y:val Z:val Vib:val
-        Serial.print(F("X:")); Serial.print(accel.x);
-        Serial.print(F(" Y:")); Serial.print(accel.y);
-        Serial.print(F(" Z:")); Serial.print(accel.z);
-        Serial.print(F(" Vib:")); Serial.print(vib_monitor.get_vibration());
-        Serial.println();
+    if (!diag_ctrl.is_active()) {
+        coordinator.update();
     }
+    panel_ctrl.update();
 
     // Pet / kick hardware watchdog to prevent timeout reset
     watchdog_hal.kick();

@@ -229,12 +229,15 @@ void WashCycleCoordinator::update()
         return;
     }
 
-    if (spin_ctrl_.is_active()) {
-        spin_ctrl_.update();
+    if (spin_ctrl_.is_active() || spin_ctrl_.has_error()) {
+        if (spin_ctrl_.is_active()) {
+            spin_ctrl_.update();
+        }
         if (spin_ctrl_.has_error()) {
             if (unbalance_recoveries_ < config_.max_unbalance_recoveries) {
                 unbalance_recoveries_++;
                 saved_spin_step_ = current_step_;
+                spin_ctrl_.reset_error();
                 execute_step(CycleStep::RECOVERY_FILL);
             }
             else {
