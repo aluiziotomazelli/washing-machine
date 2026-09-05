@@ -23,7 +23,8 @@ The initial baseline firmware (**v0.1.0**) successfully ran the wash cycles, but
 
 This repository documents the step-by-step architectural refactoring of this firmware into a production-grade embedded C++ codebase.
 
-Read the full engineering story and architectural breakdown in [`docs/case-study.md`](docs/case-study.md).
+* 📖 **Architectural Case Study:** [`docs/case-study.md`](docs/case-study.md) — The full engineering story and architectural breakdown.
+* 🛠️ **Field Service & Diagnostic Manual:** [`docs/technical-manual.md`](docs/technical-manual.md) — Step-by-step technician test procedures, LED mappings, and troubleshooting guide.
 
 ---
 
@@ -41,6 +42,7 @@ The project's architectural evolution is structured into milestones with dedicat
 | **`v0.4.0`** | **Addressable WS2812B LED Engine & Hardware Re-spin** | Bespoke zero-heap 16 MHz AVR assembly driver (27-byte buffer), non-blocking breathing animations, 7-conductor ribbon cabling, I2C bus liberation (A4/A5), buzzer interrupt collision resolution, standby sleep mode, and 100 automated unit tests. |
 | **`v0.4.1`** | **Drain Handover & Empty Spin Optimization** | Replaced monolithic blanket resets with formal `exit_step(from, to)` FSM transitions, eliminating relay chatter during drain-to-spin handover, plus empty-tub drain optimization for hand-wash spin cycles. 104 host unit tests. |
 | **`v0.5.0`** | **I2C Out-of-Balance Sensing & Safety Watchdogs** | Real-time vibration sensing during spin acceleration via liberated I2C bus (A4/A5), automatic unbalance detection and pause, and hardware AVR watchdogs. |
+| **`v0.6.0`** | **Field Service Diagnostic & Hardware Self-Test Mode** | Built-in non-intrusive self-test routine for technicians, isolating valves, pump, bidirectional motor, brake clutch, live pressure switch telemetry, dynamic MPU-6050 vibration VU-meter, and 169 automated host tests. |
 | **`v1.0.0`** | **Production Modern C++ & Portability** | Robust, fully documented, clean C++ firmware ready for deployment (including ESP32-C3 portability). |
 
 ---

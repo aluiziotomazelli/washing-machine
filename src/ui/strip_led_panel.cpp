@@ -1,4 +1,5 @@
 #include "strip_led_panel.hpp"
+#include "../hal/interfaces/i_reversible_motor.hpp"
 
 namespace ui {
 
@@ -6,6 +7,10 @@ constexpr hal::RgbColor StripLedPanel::k_color_pink;
 constexpr hal::RgbColor StripLedPanel::k_color_cyan;
 constexpr hal::RgbColor StripLedPanel::k_color_white;
 constexpr hal::RgbColor StripLedPanel::k_color_red;
+constexpr hal::RgbColor StripLedPanel::k_color_blue;
+constexpr hal::RgbColor StripLedPanel::k_color_green;
+constexpr hal::RgbColor StripLedPanel::k_color_yellow;
+constexpr hal::RgbColor StripLedPanel::k_color_magenta;
 constexpr hal::RgbColor StripLedPanel::k_color_off;
 
 StripLedPanel::StripLedPanel(
@@ -264,6 +269,173 @@ void StripLedPanel::render_frame(uint32_t now)
                 break;
             }
         }
+    }
+
+    strip_.show();
+}
+
+void StripLedPanel::show_diagnostic(DiagnosticStep step, uint16_t raw_value, bool status_ok)
+{
+    strip_.clear();
+
+    switch (step) {
+    case DiagnosticStep::LEVEL_SENSOR:
+    {
+        // Step 1 Indicator (Spin pixel P0 in Blue)
+        apply_color(k_idx_spin, k_color_blue, config_.idle_brightness);
+
+        // Water level indication based on real-time sensor reading
+        domain::WaterLevel lvl = static_cast<domain::WaterLevel>(raw_value);
+        switch (lvl) {
+        case domain::WaterLevel::LOW_LEVEL:
+            apply_color(k_idx_lvl_low, k_color_cyan, config_.idle_brightness);
+            break;
+        case domain::WaterLevel::MEDIUM_LEVEL:
+            apply_color(k_idx_lvl_low, k_color_cyan, config_.idle_brightness);
+            apply_color(k_idx_lvl_med, k_color_cyan, config_.idle_brightness);
+            break;
+        case domain::WaterLevel::HIGH_LEVEL:
+            apply_color(k_idx_lvl_low, k_color_cyan, config_.idle_brightness);
+            apply_color(k_idx_lvl_med, k_color_cyan, config_.idle_brightness);
+            apply_color(k_idx_lvl_high, k_color_cyan, config_.idle_brightness);
+            break;
+        case domain::WaterLevel::EMPTY:
+        default:
+            break;
+        }
+        break;
+    }
+
+    case DiagnosticStep::VIBRATION_SENSOR:
+    {
+        // Step 2 Indicator (Spin pixel P0 in Magenta)
+        apply_color(k_idx_spin, k_color_magenta, config_.idle_brightness);
+
+        // I2C communication link indicator on Softener pixel P8
+        if (status_ok) {
+            apply_color(k_idx_softener, k_color_green, config_.idle_brightness);
+
+            // VU-Meter from Pixel 7 down to Pixel 1
+            if (raw_value >= 400) {
+                apply_color(k_idx_lvl_low, k_color_green, config_.idle_brightness);
+            }
+            if (raw_value >= 1500) {
+                apply_color(k_idx_lvl_med, k_color_green, config_.idle_brightness);
+            }
+            if (raw_value >= 3500) {
+                apply_color(k_idx_lvl_high, k_color_green, config_.idle_brightness);
+            }
+            if (raw_value >= 6000) {
+                apply_color(k_idx_gap1, k_color_yellow, config_.idle_brightness);
+            }
+            if (raw_value >= 8500) {
+                apply_color(k_idx_heavy_wash, k_color_yellow, config_.idle_brightness);
+            }
+            if (raw_value >= 11000) {
+                apply_color(k_idx_wash, k_color_red, config_.idle_brightness);
+            }
+            if (raw_value >= 14000) {
+                apply_color(k_idx_rinse, k_color_red, config_.idle_brightness);
+            }
+        }
+        else {
+            apply_color(k_idx_softener, k_color_red, config_.idle_brightness);
+        }
+        break;
+    }
+
+    case DiagnosticStep::MAIN_VALVE:
+    {
+        // Step indicator (Spin pixel P0 in Cyan)
+        apply_color(k_idx_spin, k_color_cyan, config_.idle_brightness);
+
+        // Main valve indicator (Pixels 7 & 6): bright when active, dim when inactive
+        uint8_t brightness = (raw_value != 0) ? config_.idle_brightness : config_.future_brightness;
+        apply_color(k_idx_lvl_low, k_color_cyan, brightness);
+        apply_color(k_idx_lvl_med, k_color_cyan, brightness);
+        break;
+    }
+
+    case DiagnosticStep::SOFTENER_VALVE:
+    {
+        // Step indicator (Spin pixel P0 in Cyan)
+        apply_color(k_idx_spin, k_color_cyan, config_.idle_brightness);
+
+        // Softener valve indicator (Pixel 8): bright pink when active, dim pink when inactive
+        uint8_t brightness = (raw_value != 0) ? config_.idle_brightness : config_.future_brightness;
+        apply_color(k_idx_softener, k_color_pink, brightness);
+        break;
+    }
+
+    case DiagnosticStep::DRAIN_PUMP:
+    {
+        // Step indicator (Spin pixel P0 in Yellow)
+        apply_color(k_idx_spin, k_color_yellow, config_.idle_brightness);
+
+        // Water level indication based on real-time sensor reading (Pixels 7, 6, 5 in Cyan)
+        domain::WaterLevel lvl = static_cast<domain::WaterLevel>(raw_value);
+        switch (lvl) {
+        case domain::WaterLevel::LOW_LEVEL:
+            apply_color(k_idx_lvl_low, k_color_cyan, config_.idle_brightness);
+            break;
+        case domain::WaterLevel::MEDIUM_LEVEL:
+            apply_color(k_idx_lvl_low, k_color_cyan, config_.idle_brightness);
+            apply_color(k_idx_lvl_med, k_color_cyan, config_.idle_brightness);
+            break;
+        case domain::WaterLevel::HIGH_LEVEL:
+            apply_color(k_idx_lvl_low, k_color_cyan, config_.idle_brightness);
+            apply_color(k_idx_lvl_med, k_color_cyan, config_.idle_brightness);
+            apply_color(k_idx_lvl_high, k_color_cyan, config_.idle_brightness);
+            break;
+        case domain::WaterLevel::EMPTY:
+        default:
+            break;
+        }
+
+        // Pump active indicator on Rinse pixel P1 in Yellow
+        if (status_ok) {
+            apply_color(k_idx_rinse, k_color_yellow, config_.idle_brightness);
+        }
+        break;
+    }
+
+    case DiagnosticStep::MOTOR_AGITATE:
+    {
+        // Step indicator (Spin pixel P0 in Green)
+        apply_color(k_idx_spin, k_color_green, config_.idle_brightness);
+
+        // Directional indicators: CW on gap1 (P4 in Green), CCW on heavy_wash (P3 in Green)
+        if (raw_value == static_cast<uint16_t>(hal::MotorState::RUNNING_CLOCKWISE)) {
+            apply_color(k_idx_gap1, k_color_green, config_.idle_brightness);
+        } else if (raw_value == static_cast<uint16_t>(hal::MotorState::RUNNING_COUNTER_CLOCKWISE)) {
+            apply_color(k_idx_heavy_wash, k_color_green, config_.idle_brightness);
+        }
+        break;
+    }
+
+    case DiagnosticStep::SPIN_TEST:
+    {
+        // Step indicator (Spin pixel P0 in Red)
+        apply_color(k_idx_spin, k_color_red, config_.idle_brightness);
+
+        if (!status_ok) {
+            // Vibration trip warning indicator on Softener pixel P8
+            apply_color(k_idx_softener, k_color_red, config_.idle_brightness);
+        } else {
+            // Drain pump / clutch indicator (Wash pixel P2 in Yellow)
+            if (raw_value & 0x01) {
+                apply_color(k_idx_wash, k_color_yellow, config_.idle_brightness);
+            }
+            // Motor active indicator (Gap1 pixel P4 in Red)
+            if (raw_value & 0x02) {
+                apply_color(k_idx_gap1, k_color_red, config_.idle_brightness);
+            }
+        }
+        break;
+    }
+
+    default:
+        break;
     }
 
     strip_.show();

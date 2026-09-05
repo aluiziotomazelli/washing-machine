@@ -73,6 +73,10 @@ public:
     static constexpr hal::RgbColor k_color_cyan{0, 220, 255};
     static constexpr hal::RgbColor k_color_white{255, 197, 120};
     static constexpr hal::RgbColor k_color_red{255, 0, 0};
+    static constexpr hal::RgbColor k_color_blue{0, 100, 255};
+    static constexpr hal::RgbColor k_color_green{0, 255, 0};
+    static constexpr hal::RgbColor k_color_yellow{255, 180, 0};
+    static constexpr hal::RgbColor k_color_magenta{255, 0, 200};
     static constexpr hal::RgbColor k_color_off{0, 0, 0};
 
     StripLedPanel(hal::IRgbStrip& strip, hal::ITimerHAL& timer_hal, const StripLedConfig& config = StripLedConfig{});
@@ -89,6 +93,7 @@ public:
     void set_stage(WashStage stage) override;
     void set_selected_level(WaterLevel level) override;
     void turn_off_all() override;
+    void show_diagnostic(DiagnosticStep step, uint16_t raw_value = 0, bool status_ok = true) override;
 
     // Getter for configuration
     const StripLedConfig& get_config() const { return config_; }

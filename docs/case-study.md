@@ -14,7 +14,8 @@
 7. [Chapter 6: Event-Driven Wash Cycle Coordinator FSM & Clean UI Architecture](#chapter-6-event-driven-wash-cycle-coordinator-fsm--clean-ui-architecture)
 8. [Chapter 7: The WS2812B Addressable LED Engine, Hardware Re-spin & The AVR Interrupt Collision Dilemma](#chapter-7-the-ws2812b-addressable-led-engine-hardware-re-spin--the-avr-interrupt-collision-dilemma)
 9. [Chapter 8: The Autonomous Safety Net - Hardware Watchdog, MPU-6050 Accelerometer, and Two-Tier Dynamic Anti-Walking Spin Control](#chapter-8-the-autonomous-safety-net---hardware-watchdog-mpu-6050-accelerometer-and-two-tier-dynamic-anti-walking-spin-control)
-10. [Chapter 9: Hardware Migration to 32-bit Architecture (ESP32-C3) *(Upcoming)*](#chapter-9-hardware-migration-to-32-bit-architecture-esp32-c3)
+10. [Chapter 9: Field Service Self-Test & Diagnostic Architecture (v0.6.0)](#chapter-9-field-service-self-test--diagnostic-architecture-v060)
+11. [Chapter 10: Hardware Migration to 32-bit Architecture (ESP32-C3) *(Upcoming)*](#chapter-10-hardware-migration-to-32-bit-architecture-esp32-c3)
 
 ---
 
@@ -713,6 +714,106 @@ The firmware on the ATmega328P has achieved its ultimate evolution: industrial s
 
 ---
 
-## Chapter 9: Hardware Migration to 32-bit Architecture (ESP32-C3) *(Upcoming)*
+## Chapter 9: Field Service Self-Test & Diagnostic Architecture (v0.6.0)
+
+In high-reliability domestic appliances, manufacturing validation and in-field servicing present a major operational challenge. When an appliance malfunctions (such as a failure to drain, unexpected agitation noise, or an unbalance alarm), field service technicians traditionally had to either dismantle the chassis with a multimeter or run a full 45-minute wash cycle to reproduce the fault.
+
+Milestone `v0.6.0` addresses this by introducing a **dedicated, non-intrusive Field Service Diagnostic Controller (`DiagnosticController`)**, enabling comprehensive in-situ validation of all sensors, TRIAC-driven inductive loads, bidirectional motor windings, transmission clutch mechanics, and MEMS telemetry directly through the standard user interface.
+
+> [!TIP]
+> **Field Service & Diagnostic Manual:**  
+> For the step-by-step technician procedures, comprehensive LED color mapping tables (WS2812B RGB strip & discrete LEDs), and troubleshooting matrix, see the dedicated [Field Service & Diagnostic Manual](technical-manual.md).
+
+---
+
+### 1. Architectural Decoupling & Test Orchestration
+
+Rather than overloading the [`WashCycleCoordinator`](../src/fsm/wash_cycle_coordinator.hpp) with test routines, the diagnostic system was designed as an independent, decoupled orchestrator:
+
+```mermaid
+graph TD
+    subgraph UI_Layer ["Presentation & UI Layer (src/ui/)"]
+        BTN["Hardware Buttons<br>(Start, Program, Softener)"]
+        PC["PanelController<br>(State Routing & Mode Switching)"]
+        LEDP["ILedPanel<br>(DiscreteLedPanel / StripLedPanel)"]
+        BUZZ["Buzzer"]
+    end
+
+    subgraph Operation_Modes ["Execution Engines"]
+        WCC["WashCycleCoordinator<br>(Standard Wash Recipes)"]
+        DC["DiagnosticController<br>(Hardware Self-Test FSM)"]
+    end
+
+    subgraph Actuators_Sensors ["Actuators & Sensors (src/hal/ & src/controllers/)"]
+        VALVES["Inlet Solenoids (Main & Softener)"]
+        PUMP["Drain Pump & Clutch Actuator"]
+        MOTOR["ReversibleMotor & Agitator"]
+        PRESS["PressureSwitchSensor"]
+        VIB["VibrationMonitor (MPU-6050)"]
+    end
+
+    BTN --> PC
+    PC -->|Normal Mode| WCC
+    PC -->|Diagnostic Mode (Hold Program+Softener 2.5s)| DC
+    DC --> LEDP
+    DC --> BUZZ
+    DC --> VALVES
+    DC --> PUMP
+    DC --> MOTOR
+    DC --> PRESS
+    DC --> VIB
+```
+
+1. **Clean Separation of Concerns:**
+   - The [`DiagnosticController`](../src/ui/diagnostic_controller.hpp) exists independently of the main wash cycle state machine.
+   - When active, `PanelController` routes button events directly to `DiagnosticController`, completely bypassing recipe execution.
+2. **Reusability of Core Drivers:**
+   - Instead of re-implementing low-level pin toggles or motor timings, the diagnostic engine directly consumes the existing HAL abstractions ([`IDigitalOutput`](../src/hal/interfaces/i_digital_output.hpp), [`IReversibleMotor`](../src/hal/interfaces/i_reversible_motor.hpp), [`IWaterLevelSensor`](../src/hal/interfaces/i_water_level_sensor.hpp)) and domain controllers ([`Agitator`](../src/controllers/agitator.hpp), [`IVibrationMonitor`](../src/controllers/interfaces/i_vibration_monitor.hpp)).
+   - This ensures that test conditions replicate identical electrical and timing characteristics (e.g. motor dead-times and agitation duty cycles) to actual wash operations.
+
+---
+
+### 2. Safety Interlocks & Mechanical Guarding in Test Mode
+
+Manual actuator testing introduces severe physical risks if improper operations are permitted (such as spinning a locked transmission or ignoring critical unbalance). The `DiagnosticController` enforces rigorous hardware-level safety interlocks:
+
+1. **Non-Blocking Transmission Clutch Interlock (5-Second Brake Release):**
+   - In spin testing mode, energizing the motor while the mechanical brake band is clamped would cause immediate belt slip, TRIAC overload, or motor stall.
+   - The diagnostic controller forces a non-blocking 5.0-second delay (`k_spin_clutch_delay_ms = 5000`) after energizing the drain pump/clutch actuator before the motor is allowed to spin, guaranteeing the brake band has mechanically opened.
+2. **Active Dynamic Vibration Guarding:**
+   - Even in manual diagnostic mode, the MPU-6050 [`VibrationMonitor`](../src/controllers/vibration_monitor.hpp) remains continuously active in the background.
+   - If vibration exceeds the critical trip threshold ($V_{p-p} \ge 11,000$ LSB) or registers a severe shock ($14,000$ LSB), the controller **immediately cuts power to the motor and pump**, locks out further rotation, and latches a visual trip warning.
+3. **Fail-Safe Mode Restoration:**
+   - When exiting diagnostic mode (or in case of unexpected termination), the controller unconditionally shuts down all outputs (`valve_main_.turn_off()`, `valve_softener_.turn_off()`, `drain_pump_.turn_off()`, `motor_.stop()`), ensuring the appliance returns to `IDLE` in a guaranteed de-energized state.
+
+---
+
+### 3. Non-Intrusive Field Entry & Polymorphic Visualization
+
+To eliminate the need for external service dongles or programming headers:
+- **Hidden Technician Entry Sequence:** Entering diagnostic mode requires holding the **Program** and **Softener** buttons simultaneously for at least **2.5 seconds** while the machine is in `IDLE`. Accidental button presses during everyday operation will never enter service mode.
+- **Polymorphic Visual Feedback ([`ILedPanel::show_diagnostic`](../src/ui/interfaces/i_led_panel.hpp)):**
+  - Both [`DiscreteLedPanel`](../src/ui/discrete_led_panel.hpp) and [`StripLedPanel`](../src/ui/strip_led_panel.hpp) implement semantic diagnostic rendering.
+  - On the WS2812B strip, the real-time MPU-6050 accelerometer amplitude is rendered as a smooth, multi-color **dynamic VU-meter** across the pixel array, allowing technicians to assess suspension health visually without connecting an oscilloscope.
+- **Single-Button Load Toggling & Step Advancement:** Technicians cycle through hardware tests using the **Program** button and toggle actuators on/off with the **Start/Pause** button.
+
+---
+
+### 4. Milestone Metrics & Readiness (v0.6.0)
+
+| Metric | Legacy v0.1.0 | FSM v0.3.1 (Discrete) | Strip v0.4.0 (WS2812) | Safety & Sensing v0.5.0 | Field Diagnostics v0.6.0 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Flash ROM** | 7,130 B (23%) | 14,976 B (48%) | 15,822 B (51%) | 22,120 B (72%) | **25,240 B (82%)** |
+| **Static SRAM** | 358 B (17%) | 721 B (35%) | 821 B (40%) | 1,383 B (67%) | **1,470 B (71%)** |
+| **Dynamic Heap** | 0 B | 0 B | 0 B | 0 B | **0 B (Zero Heap)** |
+| **Automated Tests** | 0 tests | 80 tests | 100 tests | 138 tests | **169 tests (100% pass, 41 ms)** |
+| **Watchdog Protection** | None | None | None | Hardware AVR WDT | **Hardware AVR WDT (.init3 hook)** |
+| **Vibration Sensing** | None | None | None | I2C MPU-6050 (Dual-tier) | **I2C MPU-6050 (Dual-tier & VU-meter)** |
+| **Field Self-Test** | None | None | None | None | **Interactive 7-Step Diagnostic Mode** |
+| **Free GPIOs** | 0 pins | 0 pins | A4/A5 I2C + A6/A7 Free | A6/A7 Free (Analog-only) | **A6/A7 Free (Analog-only)** |
+
+---
+
+## Chapter 10: Hardware Migration to 32-bit Architecture (ESP32-C3) *(Upcoming)*
 *(Coming in future releases: Native FreeRTOS multitasking, telemetry over Wi-Fi/BLE, and migration to modern 32-bit RISC-V silicon).*
 

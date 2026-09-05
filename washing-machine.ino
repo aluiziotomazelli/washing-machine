@@ -18,6 +18,7 @@
 #include "src/controllers/spin_controller.hpp"
 #include "src/controllers/vibration_monitor.hpp"
 #include "src/fsm/wash_cycle_coordinator.hpp"
+#include "src/ui/diagnostic_controller.hpp"
 #include "src/ui/panel_controller.hpp"
 #include "src/hal/arduino/arduino_i2c_hal.hpp"
 #include "src/hal/mpu6050.hpp"
@@ -76,8 +77,33 @@ static controllers::SpinController spin_ctrl(timer_hal, drain_pump, motor, contr
 // Central Cycle Coordinator (FSM):
 static fsm::WashCycleCoordinator coordinator(timer_hal, fill_ctrl, agitator, drain_ctrl, spin_ctrl);
 
+// Diagnostic Controller:
+static ui::DiagnosticController diag_ctrl(
+    btn_start,
+    btn_program,
+    led_panel,
+    buzzer,
+    water_level_sensor,
+    valve_main,
+    valve_softener,
+    drain_pump,
+    motor,
+    timer_hal,
+    &vib_monitor
+);
+
 // UI Panel Controller:
-static ui::PanelController panel_ctrl(btn_start, btn_program, btn_level, btn_softener, led_panel, buzzer, coordinator);
+static ui::PanelController panel_ctrl(
+    btn_start,
+    btn_program,
+    btn_level,
+    btn_softener,
+    led_panel,
+    buzzer,
+    coordinator,
+    &diag_ctrl,
+    &timer_hal
+);
 
 void setup()
 {
@@ -124,7 +150,9 @@ void loop()
     motor.update();
 
     // Process & UI coordination
-    coordinator.update();
+    if (!diag_ctrl.is_active()) {
+        coordinator.update();
+    }
     panel_ctrl.update();
 
     // 50 Hz (every 20 ms) Live Telemetry for Arduino Serial Plotter
@@ -133,8 +161,8 @@ void loop()
     if (now - last_telemetry_ms >= 20) {
         last_telemetry_ms = now;
 
-        // Sample vibration monitor if spin controller is not actively sampling it
-        if (!spin_ctrl.is_active()) {
+        // Sample vibration monitor if spin controller and diagnostic controller are not actively sampling it
+        if (!spin_ctrl.is_active() && !diag_ctrl.is_active()) {
             vib_monitor.update();
         }
 

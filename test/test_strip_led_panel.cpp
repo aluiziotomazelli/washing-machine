@@ -3,6 +3,7 @@
 
 #include "ui/strip_led_panel.hpp"
 #include "hal/ws2812_strip.hpp"
+#include "hal/interfaces/i_reversible_motor.hpp"
 #include "mocks/mock_timer_hal.hpp"
 
 using namespace testing;
@@ -283,4 +284,172 @@ TEST_F(StripLedPanelTest, TurnOffAllClearsAllPixelsAndCallsShow)
     for (uint8_t i = 0; i < StripLedPanel::k_pixel_count; ++i) {
         EXPECT_EQ(strip.get_pixel(i), RgbColor(0, 0, 0));
     }
+}
+
+TEST_F(StripLedPanelTest, ShowsLevelSensorDiagnosticCorrectly)
+{
+    panel.init();
+
+    // Medium level active: P0 is Blue, P7 (Low) and P6 (Med) are Cyan, others OFF
+    panel.show_diagnostic(DiagnosticStep::LEVEL_SENSOR, static_cast<uint16_t>(WaterLevel::MEDIUM_LEVEL), true);
+
+    RgbColor p_spin = strip.get_pixel(StripLedPanel::k_idx_spin);
+    EXPECT_GT(p_spin.b, 0); // Blue step indicator
+
+    RgbColor p_low = strip.get_pixel(StripLedPanel::k_idx_lvl_low);
+    RgbColor p_med = strip.get_pixel(StripLedPanel::k_idx_lvl_med);
+    RgbColor p_high = strip.get_pixel(StripLedPanel::k_idx_lvl_high);
+
+    EXPECT_GT(p_low.g, 0); // Cyan
+    EXPECT_GT(p_low.b, 0);
+    EXPECT_GT(p_med.g, 0);
+    EXPECT_GT(p_med.b, 0);
+    EXPECT_EQ(p_high, RgbColor(0, 0, 0)); // High level not reached
+}
+
+TEST_F(StripLedPanelTest, ShowsVibrationSensorDiagnosticWithVuMeter)
+{
+    panel.init();
+
+    // Step 2, healthy I2C, vibration = 7000 (reaches P1, P2, P3, P4)
+    panel.show_diagnostic(DiagnosticStep::VIBRATION_SENSOR, 7000, true);
+
+    // Step 2 indicator is Magenta on P0
+    RgbColor p_spin = strip.get_pixel(StripLedPanel::k_idx_spin);
+    EXPECT_GT(p_spin.r, 0);
+    EXPECT_GT(p_spin.b, 0);
+
+    // I2C link is Green on P8
+    RgbColor p_soft = strip.get_pixel(StripLedPanel::k_idx_softener);
+    EXPECT_GT(p_soft.g, 0);
+    EXPECT_EQ(p_soft.r, 0);
+
+    // VU meter: P7, P6, P5 (Green), P4 (Yellow) ON, P3, P2, P1 OFF
+    EXPECT_GT(strip.get_pixel(StripLedPanel::k_idx_lvl_low).g, 0);
+    EXPECT_GT(strip.get_pixel(StripLedPanel::k_idx_lvl_med).g, 0);
+    EXPECT_GT(strip.get_pixel(StripLedPanel::k_idx_lvl_high).g, 0);
+    EXPECT_GT(strip.get_pixel(StripLedPanel::k_idx_gap1).r, 0);
+    EXPECT_GT(strip.get_pixel(StripLedPanel::k_idx_gap1).g, 0); // Yellow
+
+    EXPECT_EQ(strip.get_pixel(StripLedPanel::k_idx_heavy_wash), RgbColor(0, 0, 0));
+    EXPECT_EQ(strip.get_pixel(StripLedPanel::k_idx_wash), RgbColor(0, 0, 0));
+    EXPECT_EQ(strip.get_pixel(StripLedPanel::k_idx_rinse), RgbColor(0, 0, 0));
+}
+
+TEST_F(StripLedPanelTest, ShowsMainValveDiagnostic)
+{
+    panel.init();
+
+    // Valve ON: P0 (Spin) is Cyan, P7 & P6 (Low & Med) are bright Cyan
+    panel.show_diagnostic(DiagnosticStep::MAIN_VALVE, 1, true);
+
+    RgbColor p_spin = strip.get_pixel(StripLedPanel::k_idx_spin);
+    EXPECT_GT(p_spin.b, 0); // Cyan
+    EXPECT_GT(p_spin.g, 0);
+    EXPECT_EQ(p_spin.r, 0);
+
+    RgbColor p_low = strip.get_pixel(StripLedPanel::k_idx_lvl_low);
+    RgbColor p_med = strip.get_pixel(StripLedPanel::k_idx_lvl_med);
+    EXPECT_GT(p_low.g, 0);
+    EXPECT_GT(p_low.b, 0);
+    EXPECT_GT(p_med.g, 0);
+    EXPECT_GT(p_med.b, 0);
+}
+
+TEST_F(StripLedPanelTest, ShowsSoftenerValveDiagnostic)
+{
+    panel.init();
+
+    // Valve ON: P0 (Spin) is Cyan, P8 (Softener) is Pink
+    panel.show_diagnostic(DiagnosticStep::SOFTENER_VALVE, 1, true);
+
+    RgbColor p_spin = strip.get_pixel(StripLedPanel::k_idx_spin);
+    EXPECT_GT(p_spin.b, 0); // Cyan
+    EXPECT_GT(p_spin.g, 0);
+
+    RgbColor p_soft = strip.get_pixel(StripLedPanel::k_idx_softener);
+    EXPECT_GT(p_soft.r, 0); // Pink
+    EXPECT_GT(p_soft.b, 0);
+}
+
+TEST_F(StripLedPanelTest, ShowsDrainPumpDiagnosticWithRealtimeLevelAndPumpStatus)
+{
+    panel.init();
+
+    // Pump ON, Level MEDIUM: P0 (Spin) is Yellow, P7 & P6 (Low & Med) are Cyan, P1 (Rinse) is Yellow
+    panel.show_diagnostic(DiagnosticStep::DRAIN_PUMP, static_cast<uint16_t>(WaterLevel::MEDIUM_LEVEL), true);
+
+    RgbColor p_spin = strip.get_pixel(StripLedPanel::k_idx_spin);
+    EXPECT_GT(p_spin.r, 0); // Yellow
+    EXPECT_GT(p_spin.g, 0);
+    EXPECT_EQ(p_spin.b, 0);
+
+    // Levels 7 and 6 are Cyan, 5 is OFF
+    RgbColor p_low = strip.get_pixel(StripLedPanel::k_idx_lvl_low);
+    RgbColor p_med = strip.get_pixel(StripLedPanel::k_idx_lvl_med);
+    RgbColor p_high = strip.get_pixel(StripLedPanel::k_idx_lvl_high);
+    EXPECT_GT(p_low.g, 0);
+    EXPECT_GT(p_low.b, 0);
+    EXPECT_GT(p_med.g, 0);
+    EXPECT_GT(p_med.b, 0);
+    EXPECT_EQ(p_high, RgbColor(0, 0, 0));
+
+    // Rinse P1 is Yellow (Pump ON)
+    RgbColor p_rinse = strip.get_pixel(StripLedPanel::k_idx_rinse);
+    EXPECT_GT(p_rinse.r, 0);
+    EXPECT_GT(p_rinse.g, 0);
+    EXPECT_EQ(p_rinse.b, 0);
+}
+
+TEST_F(StripLedPanelTest, ShowsMotorAgitateDiagnostic)
+{
+    panel.init();
+
+    // 1. Stopped: P0 is Green, all others off
+    panel.show_diagnostic(DiagnosticStep::MOTOR_AGITATE, static_cast<uint16_t>(hal::MotorState::STOPPED), true);
+    RgbColor p_spin = strip.get_pixel(StripLedPanel::k_idx_spin);
+    EXPECT_GT(p_spin.g, 0);
+    EXPECT_EQ(p_spin.r, 0);
+    EXPECT_EQ(strip.get_pixel(StripLedPanel::k_idx_gap1), RgbColor(0, 0, 0));
+    EXPECT_EQ(strip.get_pixel(StripLedPanel::k_idx_heavy_wash), RgbColor(0, 0, 0));
+
+    // 2. CW active: P0 is Green, P4 (gap1) is Green
+    panel.show_diagnostic(DiagnosticStep::MOTOR_AGITATE, static_cast<uint16_t>(hal::MotorState::RUNNING_CLOCKWISE), true);
+    EXPECT_GT(strip.get_pixel(StripLedPanel::k_idx_gap1).g, 0);
+    EXPECT_EQ(strip.get_pixel(StripLedPanel::k_idx_heavy_wash), RgbColor(0, 0, 0));
+
+    // 3. CCW active: P0 is Green, P3 (heavy_wash) is Green
+    panel.show_diagnostic(DiagnosticStep::MOTOR_AGITATE, static_cast<uint16_t>(hal::MotorState::RUNNING_COUNTER_CLOCKWISE), true);
+    EXPECT_GT(strip.get_pixel(StripLedPanel::k_idx_heavy_wash).g, 0);
+    EXPECT_EQ(strip.get_pixel(StripLedPanel::k_idx_gap1), RgbColor(0, 0, 0));
+}
+
+TEST_F(StripLedPanelTest, ShowsSpinTestDiagnostic)
+{
+    panel.init();
+
+    // 1. Normal running with pump & motor active: P0 Red, P2 (wash) Yellow, P4 (gap1) Red
+    panel.show_diagnostic(DiagnosticStep::SPIN_TEST, 0x03, true);
+    RgbColor p_spin = strip.get_pixel(StripLedPanel::k_idx_spin);
+    EXPECT_GT(p_spin.r, 0);
+    EXPECT_EQ(p_spin.g, 0);
+
+    RgbColor p_wash = strip.get_pixel(StripLedPanel::k_idx_wash);
+    EXPECT_GT(p_wash.r, 0); // Yellow
+    EXPECT_GT(p_wash.g, 0);
+
+    RgbColor p_motor = strip.get_pixel(StripLedPanel::k_idx_gap1);
+    EXPECT_GT(p_motor.r, 0); // Red
+    EXPECT_EQ(p_motor.g, 0);
+
+    EXPECT_EQ(strip.get_pixel(StripLedPanel::k_idx_softener), RgbColor(0, 0, 0));
+
+    // 2. Vibration Tripped (status_ok = false): P0 Red, P2 OFF, P4 OFF, P8 (Softener) Red
+    panel.show_diagnostic(DiagnosticStep::SPIN_TEST, 0x00, false);
+    EXPECT_GT(strip.get_pixel(StripLedPanel::k_idx_spin).r, 0);
+    EXPECT_EQ(strip.get_pixel(StripLedPanel::k_idx_wash), RgbColor(0, 0, 0));
+    EXPECT_EQ(strip.get_pixel(StripLedPanel::k_idx_gap1), RgbColor(0, 0, 0));
+
+    RgbColor p_soft = strip.get_pixel(StripLedPanel::k_idx_softener);
+    EXPECT_GT(p_soft.r, 0);
 }

@@ -1,5 +1,7 @@
 #include "panel_controller.hpp"
 #include "interfaces/i_buzzer.hpp"
+#include "diagnostic_controller.hpp"
+#include "../hal/interfaces/i_timer_hal.hpp"
 
 namespace ui {
 
@@ -10,7 +12,9 @@ PanelController::PanelController(
     IButton& btn_softener,
     ILedPanel& led_panel,
     IBuzzer& buzzer,
-    fsm::WashCycleCoordinator& coordinator)
+    fsm::WashCycleCoordinator& coordinator,
+    DiagnosticController* diag_ctrl,
+    hal::ITimerHAL* timer_hal)
     : btn_start_pause_(btn_start_pause)
     , btn_program_(btn_program)
     , btn_water_level_(btn_water_level)
@@ -18,7 +22,14 @@ PanelController::PanelController(
     , led_panel_(led_panel)
     , buzzer_(buzzer)
     , coordinator_(coordinator)
+    , diag_ctrl_(diag_ctrl)
+    , timer_hal_(timer_hal)
 {
+}
+
+bool PanelController::is_diagnostic_active() const
+{
+    return diag_ctrl_ != nullptr && diag_ctrl_->is_active();
 }
 
 void PanelController::init()
@@ -43,6 +54,40 @@ void PanelController::update()
     btn_water_level_.update();
     btn_softener_.update();
     buzzer_.update();
+
+    // Check Diagnostic Mode entry trigger (Simultaneous hold of Program + Softener for >= 2.5s in IDLE)
+    if (diag_ctrl_ != nullptr && coordinator_.get_state() == domain::MachineState::IDLE && !diag_ctrl_->is_active()) {
+        if (btn_program_.is_pressed() && btn_softener_.is_pressed()) {
+            uint32_t now = timer_hal_ ? timer_hal_->get_time_ms() : 0;
+            if (diag_entry_press_start_ms_ == 0) {
+                diag_entry_press_start_ms_ = now;
+            } else if (now - diag_entry_press_start_ms_ >= k_diag_trigger_hold_ms) {
+                diag_entry_press_start_ms_ = 0;
+                // Flush button click buffers before entering diagnostic
+                btn_program_.get_last_click();
+                btn_softener_.get_last_click();
+                btn_start_pause_.get_last_click();
+                diag_ctrl_->enter();
+            }
+        } else {
+            diag_entry_press_start_ms_ = 0;
+        }
+    }
+
+    // If Diagnostic Mode is active, delegate all updates to DiagnosticController
+    if (diag_ctrl_ != nullptr && diag_ctrl_->is_active()) {
+        diag_ctrl_->update();
+        if (!diag_ctrl_->is_active()) {
+            // Re-sync UI back to IDLE state upon diagnostic exit
+            led_panel_.set_program(selected_program_);
+            led_panel_.set_selected_level(selected_level_);
+            led_panel_.set_softener(softener_enabled_);
+            led_panel_.set_machine_state(domain::MachineState::IDLE);
+            prev_state_ = domain::MachineState::IDLE;
+        }
+        return;
+    }
+
     if (!buzzer_.is_playing()) {
         led_panel_.update();
     }

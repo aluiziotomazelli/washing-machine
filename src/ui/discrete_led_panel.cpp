@@ -1,4 +1,5 @@
 #include "discrete_led_panel.hpp"
+#include "../hal/interfaces/i_reversible_motor.hpp"
 
 namespace ui {
 
@@ -272,6 +273,78 @@ void DiscreteLedPanel::write_pin(uint8_t pin, bool state)
     }
     bool level = active_high_ ? state : !state;
     gpio_hal_.set_level(pin, level ? hal::GpioLevel::LEVEL_HIGH : hal::GpioLevel::LEVEL_LOW);
+}
+
+void DiscreteLedPanel::show_diagnostic(DiagnosticStep step, uint16_t raw_value, bool status_ok)
+{
+    turn_off_all();
+
+    switch (step) {
+    case DiagnosticStep::LEVEL_SENSOR:
+        set_selected_level(static_cast<WaterLevel>(raw_value));
+        write_pin(pins_.spin, true); // Status indicator for step 1
+        break;
+
+    case DiagnosticStep::VIBRATION_SENSOR:
+        write_pin(pins_.rinse, true); // Status indicator for step 2
+        write_pin(pins_.softener, status_ok);
+
+        if (status_ok) {
+            if (raw_value >= 400) {
+                write_pin(pins_.level_low, true);
+            }
+            if (raw_value >= 5000) {
+                write_pin(pins_.level_med, true);
+            }
+            if (raw_value >= 9000) {
+                if (pins_.level_high != 255) {
+                    write_pin(pins_.level_high, true);
+                }
+            }
+        }
+        break;
+
+    case DiagnosticStep::MAIN_VALVE:
+        write_pin(pins_.wash, true); // Status indicator for step 3
+        if (raw_value != 0) {
+            write_pin(pins_.level_low, true);
+            write_pin(pins_.level_med, true);
+        }
+        break;
+
+    case DiagnosticStep::SOFTENER_VALVE:
+        write_pin(pins_.wash, true); // Status indicator for step 4
+        if (raw_value != 0) {
+            write_pin(pins_.softener, true);
+        }
+        break;
+
+    case DiagnosticStep::DRAIN_PUMP:
+        set_selected_level(static_cast<WaterLevel>(raw_value));
+        write_pin(pins_.spin, true);          // Step indicator
+        write_pin(pins_.softener, status_ok); // Pump active indicator
+        break;
+
+    case DiagnosticStep::MOTOR_AGITATE:
+        write_pin(pins_.wash, true); // Step indicator & CCW indicator
+        if (raw_value == static_cast<uint16_t>(hal::MotorState::RUNNING_CLOCKWISE)) {
+            write_pin(pins_.spin, true); // CW indicator
+        }
+        break;
+
+    case DiagnosticStep::SPIN_TEST:
+        write_pin(pins_.spin, true); // Step indicator
+        if (!status_ok) {
+            write_pin(pins_.softener, true); // Vibration trip warning indicator
+        } else {
+            write_pin(pins_.rinse, (raw_value & 0x01) != 0); // Pump active indicator
+            write_pin(pins_.wash, (raw_value & 0x02) != 0);  // Motor active indicator
+        }
+        break;
+
+    default:
+        break;
+    }
 }
 
 } // namespace ui

@@ -15,6 +15,7 @@ public:
     MOCK_METHOD(void, set_stage, (domain::WashStage stage), (override));
     MOCK_METHOD(void, set_selected_level, (domain::WaterLevel level), (override));
     MOCK_METHOD(void, turn_off_all, (), (override));
+    MOCK_METHOD(void, show_diagnostic, (domain::DiagnosticStep step, uint16_t raw_value, bool status_ok), (override));
 };
 
 } // namespace mocks

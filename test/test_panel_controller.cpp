@@ -2,6 +2,7 @@
 #include <gmock/gmock.h>
 
 #include "ui/panel_controller.hpp"
+#include "ui/diagnostic_controller.hpp"
 #include "mocks/mock_button.hpp"
 #include "mocks/mock_buzzer.hpp"
 #include "mocks/mock_led_panel.hpp"
@@ -43,6 +44,19 @@ protected:
     NiceMock<mocks::MockLedPanel> led_panel;
     NiceMock<mocks::MockBuzzer> buzzer;
 
+    DiagnosticController diag_ctrl{
+        btn_start,
+        btn_program,
+        led_panel,
+        buzzer,
+        mock_water_sensor,
+        mock_valve_main,
+        mock_valve_softener,
+        mock_drain_pump,
+        mock_motor,
+        mock_timer
+    };
+
     PanelController panel_ctrl{
         btn_start,
         btn_program,
@@ -50,7 +64,9 @@ protected:
         btn_softener,
         led_panel,
         buzzer,
-        coordinator
+        coordinator,
+        &diag_ctrl,
+        &mock_timer
     };
 
     void SetUp() override {
@@ -59,6 +75,8 @@ protected:
         ON_CALL(btn_program, get_last_click()).WillByDefault(Return(ButtonClickType::NONE_CLICK));
         ON_CALL(btn_level, get_last_click()).WillByDefault(Return(ButtonClickType::NONE_CLICK));
         ON_CALL(btn_softener, get_last_click()).WillByDefault(Return(ButtonClickType::NONE_CLICK));
+        ON_CALL(btn_program, is_pressed()).WillByDefault(Return(false));
+        ON_CALL(btn_softener, is_pressed()).WillByDefault(Return(false));
     }
 };
 
@@ -376,4 +394,86 @@ TEST_F(PanelControllerTest, VeryLongClickInErrorCancelsCycleToIdle)
     panel_ctrl.update();
     EXPECT_EQ(coordinator.get_state(), MachineState::IDLE);
     EXPECT_EQ(coordinator.get_error(), MachineError::NONE);
+}
+
+TEST_F(PanelControllerTest, EntersDiagnosticModeOnProgramAndSoftenerSimultaneousHold)
+{
+    panel_ctrl.init();
+
+    // In IDLE: hold Program and Softener simultaneously
+    ON_CALL(btn_program, is_pressed()).WillByDefault(Return(true));
+    ON_CALL(btn_softener, is_pressed()).WillByDefault(Return(true));
+
+    // At t=1000ms: simultaneous hold begins
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1000));
+    panel_ctrl.update();
+    EXPECT_FALSE(panel_ctrl.is_diagnostic_active());
+
+    // At t=2000ms: elapsed 1000ms < 2500ms -> not yet entered
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(2000));
+    panel_ctrl.update();
+    EXPECT_FALSE(panel_ctrl.is_diagnostic_active());
+
+    // At t=3550ms: elapsed 2550ms >= 2500ms -> enters diagnostic mode
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(3550));
+    EXPECT_CALL(buzzer, play_pattern(BuzzerPattern::DOUBLE_BEEP)).Times(1);
+
+    panel_ctrl.update();
+    EXPECT_TRUE(panel_ctrl.is_diagnostic_active());
+    EXPECT_EQ(diag_ctrl.get_current_step(), DiagnosticStep::LEVEL_SENSOR);
+}
+
+TEST_F(PanelControllerTest, ReleasingEitherButtonBeforeHoldTimeoutAbortsDiagnosticEntry)
+{
+    panel_ctrl.init();
+
+    // In IDLE: hold starts at t=1000ms
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1000));
+    ON_CALL(btn_program, is_pressed()).WillByDefault(Return(true));
+    ON_CALL(btn_softener, is_pressed()).WillByDefault(Return(true));
+    panel_ctrl.update();
+
+    // At t=2000ms, user releases Softener button
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(2000));
+    ON_CALL(btn_softener, is_pressed()).WillByDefault(Return(false));
+    panel_ctrl.update();
+    EXPECT_FALSE(panel_ctrl.is_diagnostic_active());
+
+    // At t=4000ms, hold is reset -> does not enter diagnostic mode
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(4000));
+    panel_ctrl.update();
+    EXPECT_FALSE(panel_ctrl.is_diagnostic_active());
+}
+
+TEST_F(PanelControllerTest, ExitsDiagnosticModeAndRestoresIdlePanelState)
+{
+    panel_ctrl.init();
+
+    // Enter diagnostic mode (hold >= 2500ms)
+    ON_CALL(btn_program, is_pressed()).WillByDefault(Return(true));
+    ON_CALL(btn_softener, is_pressed()).WillByDefault(Return(true));
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1000));
+    panel_ctrl.update();
+
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(3600));
+    panel_ctrl.update();
+    EXPECT_TRUE(panel_ctrl.is_diagnostic_active());
+
+    // Release buttons
+    ON_CALL(btn_program, is_pressed()).WillByDefault(Return(false));
+    ON_CALL(btn_softener, is_pressed()).WillByDefault(Return(false));
+
+    // Long press Start button inside diagnostic mode to exit
+    EXPECT_CALL(btn_start, get_last_click())
+        .WillOnce(Return(ButtonClickType::LONG_CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+
+    // Panel LEDs should be restored to IDLE selection upon exit
+    EXPECT_CALL(led_panel, set_program(WashProgram::RINSE_ONLY)).Times(1);
+    EXPECT_CALL(led_panel, set_selected_level(WaterLevel::LOW_LEVEL)).Times(1);
+    EXPECT_CALL(led_panel, set_softener(false)).Times(1);
+    EXPECT_CALL(led_panel, set_machine_state(MachineState::IDLE, MachineError::NONE)).Times(1);
+
+    panel_ctrl.update();
+    EXPECT_FALSE(panel_ctrl.is_diagnostic_active());
 }

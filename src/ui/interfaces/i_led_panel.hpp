@@ -10,6 +10,7 @@ using domain::MachineState;
 using domain::WashProgram;
 using domain::WashStage;
 using domain::WaterLevel;
+using domain::DiagnosticStep;
 
 /**
  * @interface ILedPanel
@@ -58,6 +59,14 @@ public:
      * @brief Turn off all indicators immediately.
      */
     virtual void turn_off_all() = 0;
+
+    /**
+     * @brief Render visual feedback for a diagnostic test step.
+     * @param step Current diagnostic test phase.
+     * @param raw_value Auxiliary sensor reading (e.g. current level or vibration amplitude).
+     * @param status_ok Status flag (e.g. true if sensor/I2C is communicating).
+     */
+    virtual void show_diagnostic(DiagnosticStep step, uint16_t raw_value = 0, bool status_ok = true) = 0;
 };
 
 } // namespace ui
