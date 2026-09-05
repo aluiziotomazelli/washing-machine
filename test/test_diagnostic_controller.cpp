@@ -55,6 +55,7 @@ protected:
         ON_CALL(motor, get_state()).WillByDefault(Return(hal::MotorState::STOPPED));
         ON_CALL(vib_monitor, is_critical_unbalance()).WillByDefault(Return(false));
         ON_CALL(vib_monitor, get_vibration()).WillByDefault(Return(200));
+        ON_CALL(vib_monitor, is_sensor_ok()).WillByDefault(Return(true));
 
         ON_CALL(drain_pump, turn_on()).WillByDefault([this]() { pump_state = true; });
         ON_CALL(drain_pump, turn_off()).WillByDefault([this]() { pump_state = false; });
@@ -157,6 +158,20 @@ TEST_F(DiagnosticControllerTest, VibrationSensorStepQueriesVibrationMonitorAndUp
     EXPECT_CALL(vib_monitor, update()).Times(1);
     EXPECT_CALL(vib_monitor, get_vibration()).WillOnce(Return(1250));
     EXPECT_CALL(led_panel, show_diagnostic(DiagnosticStep::VIBRATION_SENSOR, 1250, true)).Times(1);
+
+    diag_ctrl.update();
+    EXPECT_EQ(diag_ctrl.get_current_step(), DiagnosticStep::VIBRATION_SENSOR);
+}
+
+TEST_F(DiagnosticControllerTest, VibrationSensorStepShowsRedWhenSensorFails)
+{
+    diag_ctrl.enter();
+
+    EXPECT_CALL(btn_program, get_last_click()).WillOnce(Return(ButtonClickType::CLICK));
+    EXPECT_CALL(vib_monitor, update()).Times(1);
+    EXPECT_CALL(vib_monitor, is_sensor_ok()).WillOnce(Return(false));
+    EXPECT_CALL(vib_monitor, get_vibration()).WillOnce(Return(0));
+    EXPECT_CALL(led_panel, show_diagnostic(DiagnosticStep::VIBRATION_SENSOR, 0, false)).Times(1);
 
     diag_ctrl.update();
     EXPECT_EQ(diag_ctrl.get_current_step(), DiagnosticStep::VIBRATION_SENSOR);

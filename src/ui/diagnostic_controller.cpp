@@ -145,7 +145,7 @@ void DiagnosticController::update_vibration_sensor_test()
     if (vib_monitor_ != nullptr) {
         vib_monitor_->update();
         vib = vib_monitor_->get_vibration();
-        ok = true;
+        ok = vib_monitor_->is_sensor_ok();
     }
     led_panel_.show_diagnostic(
         DiagnosticStep::VIBRATION_SENSOR,

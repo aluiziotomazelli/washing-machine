@@ -41,6 +41,7 @@ public:
     bool is_in_motion() const override { return is_in_motion_; }
     bool is_warning() const override { return is_warning_; }
     bool is_critical_unbalance() const override { return is_tripped_; }
+    bool is_sensor_ok() const override { return is_sensor_ok_; }
 
     void reset() override;
 
@@ -73,6 +74,8 @@ private:
     bool is_in_motion_{false};
     bool is_warning_{false};
     bool is_tripped_{false};
+    bool is_sensor_ok_{false};
+    uint32_t last_read_success_ms_{0};
 
     // Temporal trip tracking
     uint32_t trip_start_ms_{0};

@@ -199,3 +199,25 @@ TEST_F(VibrationMonitorTest, DisabledMonitorIgnoresUpdates)
     EXPECT_CALL(mock_accel, read_accel(_)).Times(0);
     monitor.update();
 }
+
+TEST_F(VibrationMonitorTest, TracksSensorCommunicationHealth)
+{
+    // Initially sensor_ok is false before any successful read
+    EXPECT_FALSE(monitor.is_sensor_ok());
+
+    // Successful read -> is_sensor_ok becomes true
+    current_time_ms = 20;
+    hal::Vector3 sample{100, 200, 300};
+    EXPECT_CALL(mock_accel, read_accel(_))
+        .WillOnce(DoAll(SetArgReferee<0>(sample), Return(true)));
+    monitor.update();
+    EXPECT_TRUE(monitor.is_sensor_ok());
+
+    // Sensor disconnected / failing for > 200ms -> is_sensor_ok becomes false
+    current_time_ms = 300;
+    EXPECT_CALL(mock_accel, read_accel(_))
+        .WillOnce(Return(false));
+    monitor.update();
+    EXPECT_FALSE(monitor.is_sensor_ok());
+    EXPECT_EQ(monitor.get_vibration(), 0);
+}

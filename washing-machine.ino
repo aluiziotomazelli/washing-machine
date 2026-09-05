@@ -107,9 +107,6 @@ static ui::PanelController panel_ctrl(
 
 void setup()
 {
-    // Serial port for live telemetry (Arduino Serial Plotter compatible)
-    Serial.begin(115200);
-
     // Check if recovery from hardware watchdog reset occurred
     bool recovered_from_wdt = watchdog_hal.was_reset_by_watchdog();
 
@@ -154,27 +151,6 @@ void loop()
         coordinator.update();
     }
     panel_ctrl.update();
-
-    // 50 Hz (every 20 ms) Live Telemetry for Arduino Serial Plotter
-    static uint32_t last_telemetry_ms = 0;
-    uint32_t now = timer_hal.get_time_ms();
-    if (now - last_telemetry_ms >= 20) {
-        last_telemetry_ms = now;
-
-        // Sample vibration monitor if spin controller and diagnostic controller are not actively sampling it
-        if (!spin_ctrl.is_active() && !diag_ctrl.is_active()) {
-            vib_monitor.update();
-        }
-
-        const hal::Vector3& accel = vib_monitor.get_last_sample();
-
-        // Output format: X:val Y:val Z:val Vib:val
-        Serial.print(F("X:")); Serial.print(accel.x);
-        Serial.print(F(" Y:")); Serial.print(accel.y);
-        Serial.print(F(" Z:")); Serial.print(accel.z);
-        Serial.print(F(" Vib:")); Serial.print(vib_monitor.get_vibration());
-        Serial.println();
-    }
 
     // Pet / kick hardware watchdog to prevent timeout reset
     watchdog_hal.kick();

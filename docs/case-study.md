@@ -803,8 +803,8 @@ To eliminate the need for external service dongles or programming headers:
 
 | Metric | Legacy v0.1.0 | FSM v0.3.1 (Discrete) | Strip v0.4.0 (WS2812) | Safety & Sensing v0.5.0 | Field Diagnostics v0.6.0 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Flash ROM** | 7,130 B (23%) | 14,976 B (48%) | 15,822 B (51%) | 22,120 B (72%) | **25,240 B (82%)** |
-| **Static SRAM** | 358 B (17%) | 721 B (35%) | 821 B (40%) | 1,383 B (67%) | **1,470 B (71%)** |
+| **Flash ROM** | 7,130 B (23%) | 14,976 B (48%) | 15,822 B (51%) | 22,120 B (72%) | **23,770 B (77%)** |
+| **Static SRAM** | 358 B (17%) | 721 B (35%) | 821 B (40%) | 1,383 B (67%) | **1,287 B (62%)** |
 | **Dynamic Heap** | 0 B | 0 B | 0 B | 0 B | **0 B (Zero Heap)** |
 | **Automated Tests** | 0 tests | 80 tests | 100 tests | 138 tests | **169 tests (100% pass, 41 ms)** |
 | **Watchdog Protection** | None | None | None | Hardware AVR WDT | **Hardware AVR WDT (.init3 hook)** |

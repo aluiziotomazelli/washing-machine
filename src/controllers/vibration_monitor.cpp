@@ -33,8 +33,10 @@ void VibrationMonitor::reset()
     is_in_motion_ = false;
     is_warning_ = false;
     is_tripped_ = false;
+    is_sensor_ok_ = false;
     trip_start_ms_ = 0;
     last_sample_ms_ = 0;
+    last_read_success_ms_ = 0;
 }
 
 void VibrationMonitor::update()
@@ -51,7 +53,14 @@ void VibrationMonitor::update()
 
     hal::Vector3 sample;
     if (accel_.read_accel(sample)) {
+        is_sensor_ok_ = true;
+        last_read_success_ms_ = now;
         process_sample(sample, now);
+    } else {
+        if (now - last_read_success_ms_ > 200) {
+            is_sensor_ok_ = false;
+            current_vib_ = 0;
+        }
     }
 }
 
