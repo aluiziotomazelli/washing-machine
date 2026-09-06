@@ -61,6 +61,10 @@ void DiagnosticController::stop_all_actuators()
         motor_.stop();
     }
     motor_.update();
+
+    if (vib_monitor_ != nullptr) {
+        vib_monitor_->reset();
+    }
 }
 
 void DiagnosticController::next_step()
@@ -270,15 +274,24 @@ void DiagnosticController::update_spin_test(ButtonClickType start_click)
     if (start_click == ButtonClickType::CLICK) {
         if (spin_tripped_) {
             spin_tripped_ = false;
+            if (vib_monitor_ != nullptr) {
+                vib_monitor_->reset();
+            }
             buzzer_.beep(30);
         } else if (spin_active_) {
             spin_active_ = false;
             motor_.stop();
             drain_pump_.turn_off();
+            if (vib_monitor_ != nullptr) {
+                vib_monitor_->reset();
+            }
             buzzer_.beep(30);
         } else {
             spin_active_ = true;
             spin_start_time_ms_ = timer_hal_.get_time_ms();
+            if (vib_monitor_ != nullptr) {
+                vib_monitor_->reset();
+            }
             drain_pump_.turn_on();
             buzzer_.beep(30);
         }

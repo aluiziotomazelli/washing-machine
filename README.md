@@ -1,7 +1,7 @@
 # Clean C++ Washing Machine Controller
 
 [![CI - Host Tests & Firmware Build](https://github.com/aluiziotomazelli/washing-machine/actions/workflows/ci.yml/badge.svg)](https://github.com/aluiziotomazelli/washing-machine/actions/workflows/ci.yml)
-[![Unit Tests](https://img.shields.io/badge/tests-199%20passed-brightgreen)](https://github.com/aluiziotomazelli/washing-machine)
+[![Unit Tests](https://img.shields.io/badge/tests-200%20passed-brightgreen)](https://github.com/aluiziotomazelli/washing-machine)
 [![Heap Allocation](https://img.shields.io/badge/heap-0%20bytes-blue)](https://github.com/aluiziotomazelli/washing-machine)
 [![Target](https://img.shields.io/badge/target-ATmega328P%20%2F%2016MHz-orange)](https://github.com/aluiziotomazelli/washing-machine)
 [![Coverage Report](https://img.shields.io/badge/coverage-report-blue)](https://aluiziotomazelli.github.io/washing-machine/index.html)
@@ -24,7 +24,7 @@ An industrial-grade, open-source custom controller firmware for domestic top-loa
   * **`main` branch**: WS2812B 9-pixel Addressable RGB LED strip with smooth breathing animations.
   * **`discrete-leds` branch**: Classical discrete LED panel board pinout.
 * **Zero Dynamic Memory (0 Bytes Heap)**: Deterministic execution with zero heap fragmentation risk.
-* **Dual-Target Native PC Unit Testing**: 199 unit tests written in GoogleTest/GoogleMock executing in ~45 ms on PC.
+* **Dual-Target Native PC Unit Testing**: 200 unit tests written in GoogleTest/GoogleMock executing in ~45 ms on PC.
 * **Hardware Watchdog Protection**: AVR hardware WDT with early boot disarm (`.init3`), continuous runtime kicking, and reboot detection with buzzer acoustic alerts.
 
 ---
@@ -89,7 +89,7 @@ washing-machine/
 │       ├── diagnostic_controller.hpp    # 7-step interactive technician diagnostic controller
 │       ├── strip_led_panel.hpp          # WS2812B RGB visual presentation engine
 │       └── discrete_led_panel.hpp       # Discrete GPIO LED visual presentation engine
-├── test/                                # GoogleTest / GoogleMock PC unit test suite (199 tests)
+├── test/                                # GoogleTest / GoogleMock PC unit test suite (200 tests)
 └── docs/                                # In-depth documentation & engineering manuals
     ├── case-study.md                    # Complete engineering case study (from spaghetti to clean C++)
     └── technical-manual.md              # Field technician service & diagnostic manual
@@ -132,7 +132,7 @@ make build
 # 2. Upload firmware to the board via USB serial:
 make flash PORT=/dev/ttyUSB0
 
-# 3. Run all 199 native Host Unit Tests on your PC (GoogleTest / GoogleMock):
+# 3. Run all 200 native Host Unit Tests on your PC (GoogleTest / GoogleMock):
 make test
 
 # 4. Generate local HTML code coverage report (test/coverage/index.html):
