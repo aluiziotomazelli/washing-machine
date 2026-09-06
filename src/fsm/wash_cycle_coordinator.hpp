@@ -52,7 +52,7 @@ struct CoordinatorConfig {
     // Rinse Stage Durations (in seconds)
     uint32_t single_rinse_agitate_sec{7 * 60};     // 7 min single rinse
     uint32_t double_rinse_1_agitate_sec{5 * 60};   // 5 min 1st rinse
-    uint32_t double_rinse_interm_spin_sec{2 * 60}; // 2 min intermediate spin
+    uint32_t intermediate_spin_sec{2 * 60};       // 2 min intermediate spin (after wash & rinse)
     uint32_t double_rinse_2_agitate_sec{2 * 60};   // 2 min gentle rinse with softener
     uint32_t double_rinse_2_soak_sec{5 * 60};      // 5 min softener soak
     uint32_t double_rinse_2_agitate_post_sec{2 * 60}; // 2 min post-soak agitation

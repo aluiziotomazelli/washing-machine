@@ -350,7 +350,7 @@ void WashCycleCoordinator::execute_step(CycleStep step)
         break;
 
     case CycleStep::SPIN_INTERMEDIATE:
-        spin_ctrl_.start(level_, config_.double_rinse_interm_spin_sec);
+        spin_ctrl_.start(level_, config_.intermediate_spin_sec);
         break;
 
     case CycleStep::SPIN_FINAL:
@@ -489,6 +489,9 @@ void WashCycleCoordinator::plan_next_step()
             case 2:
                 execute_step(CycleStep::DRAIN);
                 break;
+            case 3:
+                execute_step(CycleStep::SPIN_INTERMEDIATE);
+                break;
             default:
                 // Wash stage finished! Switch to Rinse & Spin
                 in_rinse_subcycle_ = true;
@@ -518,6 +521,9 @@ void WashCycleCoordinator::plan_next_step()
                 break;
             case 4:
                 execute_step(CycleStep::DRAIN);
+                break;
+            case 5:
+                execute_step(CycleStep::SPIN_INTERMEDIATE);
                 break;
             default:
                 // Heavy wash stage finished! Switch to Rinse & Spin

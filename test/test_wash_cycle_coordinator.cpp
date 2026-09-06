@@ -215,9 +215,9 @@ TEST_F(WashCycleCoordinatorTest, SeamlessHandoverFromDrainToSpinNeverTurnsOffPum
     EXPECT_TRUE(spin_ctrl.is_active());
 }
 
-TEST_F(WashCycleCoordinatorTest, HandoverFromDrainToFillTurnsOffPump)
+TEST_F(WashCycleCoordinatorTest, HandoverFromDrainToSpinAndSpinToFill)
 {
-    // Normal wash: Step 0 is FILL, Step 1 is AGITATE, Step 2 is DRAIN
+    // Normal wash: Step 0 is FILL, Step 1 is AGITATE, Step 2 is DRAIN, Step 3 is SPIN_INTERMEDIATE
     coordinator.start_cycle(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false);
 
     // Skip FILL and AGITATE to reach DRAIN (Step 2)
@@ -225,15 +225,20 @@ TEST_F(WashCycleCoordinatorTest, HandoverFromDrainToFillTurnsOffPump)
     coordinator.advance_step(); // moves to Step 2 (DRAIN)
     EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::DRAIN);
 
-    // Tub becomes empty and bleed completes
+    // Tub becomes empty and bleed completes -> transitions into SPIN_INTERMEDIATE (smooth handover)
     ON_CALL(mock_water_sensor, is_empty()).WillByDefault(Return(true));
     coordinator.update();
 
-    // Moving from DRAIN in Normal Wash into RINSE (FILL_MAIN) MUST turn off the pump!
-    EXPECT_CALL(mock_drain_pump, turn_off()).Times(1);
-
     simulated_time_ms += 31000;
     coordinator.update();
+
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::SPIN_INTERMEDIATE);
+    EXPECT_TRUE(spin_ctrl.is_active());
+
+    // Moving from SPIN_INTERMEDIATE in Normal Wash into RINSE (FILL_MAIN) MUST turn off the pump!
+    EXPECT_CALL(mock_drain_pump, turn_off()).Times(AtLeast(1));
+
+    coordinator.advance_step();
 
     EXPECT_EQ(coordinator.get_current_stage(), domain::WashStage::RINSE);
     EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::FILL_MAIN);
