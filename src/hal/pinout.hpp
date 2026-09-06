@@ -14,10 +14,12 @@ constexpr uint8_t k_btn_program_pin = 16; // A2 (Pin 16) / Wash program cycle bu
 
 // -----------------------------------------------------------------------------
 // Sensor Input Pins (Pressure Switch)
+// Board connectyor pin map:
+//  - Red wire - GND | Green wire - pressure high | Black wire - pressure low | White wire - pressure med
 // -----------------------------------------------------------------------------
-constexpr uint8_t k_pressure_switch_low_pin = 10;  // D10 / NC contact 31-32 (Low water level)
-constexpr uint8_t k_pressure_switch_med_pin = 11;  // D11 / NO contact 11-13 (Medium water level)
-constexpr uint8_t k_pressure_switch_high_pin = 12; // D12 / NO contact 21-23 (High water level)
+constexpr uint8_t k_pressure_switch_low_pin = 10;  // D10 / NC contact 31-32 (Back wire on connector)
+constexpr uint8_t k_pressure_switch_med_pin = 11;  // D11 / NO contact 11-13 (White wire on connector)
+constexpr uint8_t k_pressure_switch_high_pin = 12; // D12 / NO contact 21-23 (Black wire on connector)
 
 // -----------------------------------------------------------------------------
 // UI Output Pins (Buzzer & WS2812 Addressable LED Strip)

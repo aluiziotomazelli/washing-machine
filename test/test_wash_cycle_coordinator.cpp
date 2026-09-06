@@ -92,8 +92,8 @@ TEST_F(WashCycleCoordinatorTest, StartsSpinOnlyRecipeAndSequencesDrainThenSpin)
     ON_CALL(mock_water_sensor, is_empty()).WillByDefault(Return(true));
     coordinator.update();
 
-    // Bleed duration expires (30s default) -> advances to SPIN_FINAL
-    simulated_time_ms += 31000;
+    // Bleed duration expires (20s default) -> advances to SPIN_FINAL
+    simulated_time_ms += 21000;
     coordinator.update();
 
     EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::SPIN_FINAL);
@@ -558,6 +558,47 @@ TEST_F(WashCycleCoordinatorTest, ResumesInterruptedCycleFromRinseSubcycle)
     EXPECT_EQ(coordinator.get_level(), domain::WaterLevel::HIGH_LEVEL);
     EXPECT_TRUE(coordinator.is_softener_enabled());
     EXPECT_EQ(coordinator.get_step_index(), 4);
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::FILL_SOFTENER);
+    EXPECT_TRUE(fill_ctrl.is_active());
+}
+
+TEST_F(WashCycleCoordinatorTest, StartsFillWithBothValvesWhenSoftenerDisabled)
+{
+    EXPECT_CALL(mock_valve_main, turn_on()).Times(1);
+    EXPECT_CALL(mock_valve_softener, turn_on()).Times(1);
+
+    coordinator.start_cycle(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false);
+    EXPECT_TRUE(fill_ctrl.is_active());
+}
+
+TEST_F(WashCycleCoordinatorTest, StartsFillWithMainValveOnlyWhenSoftenerEnabled)
+{
+    EXPECT_CALL(mock_valve_main, turn_on()).Times(1);
+    EXPECT_CALL(mock_valve_softener, turn_on()).Times(0);
+
+    coordinator.start_cycle(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, true);
+    EXPECT_TRUE(fill_ctrl.is_active());
+}
+
+TEST_F(WashCycleCoordinatorTest, DoubleRinseUsesMainValveOnlyForFill1AndBothValvesForFill2)
+{
+    // Fill 1 (Step 0 - Wash stage or 1st rinse): Softener enabled -> softener valve must NOT turn on
+    EXPECT_CALL(mock_valve_main, turn_on()).Times(1);
+    EXPECT_CALL(mock_valve_softener, turn_on()).Times(0);
+
+    coordinator.start_cycle(domain::WashProgram::RINSE_ONLY, domain::WaterLevel::LOW_LEVEL, true);
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::FILL_MAIN);
+    EXPECT_TRUE(fill_ctrl.is_active());
+
+    // Advance to step 4 (FILL_SOFTENER): Both valves turn on
+    EXPECT_CALL(mock_valve_main, turn_on()).Times(1);
+    EXPECT_CALL(mock_valve_softener, turn_on()).Times(1);
+
+    coordinator.advance_step(); // Step 1: AGITATE_NORMAL
+    coordinator.advance_step(); // Step 2: DRAIN
+    coordinator.advance_step(); // Step 3: SPIN_INTERMEDIATE
+    coordinator.advance_step(); // Step 4: FILL_SOFTENER
+
     EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::FILL_SOFTENER);
     EXPECT_TRUE(fill_ctrl.is_active());
 }

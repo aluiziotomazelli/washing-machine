@@ -1,7 +1,7 @@
 # Clean C++ Washing Machine Controller
 
 [![CI - Host Tests & Firmware Build](https://github.com/aluiziotomazelli/washing-machine/actions/workflows/ci.yml/badge.svg)](https://github.com/aluiziotomazelli/washing-machine/actions/workflows/ci.yml)
-[![Unit Tests](https://img.shields.io/badge/tests-200%20passed-brightgreen)](https://github.com/aluiziotomazelli/washing-machine)
+[![Unit Tests](https://img.shields.io/badge/tests-203%20passed-brightgreen)](https://github.com/aluiziotomazelli/washing-machine)
 [![Heap Allocation](https://img.shields.io/badge/heap-0%20bytes-blue)](https://github.com/aluiziotomazelli/washing-machine)
 [![Target](https://img.shields.io/badge/target-ATmega328P%20%2F%2016MHz-orange)](https://github.com/aluiziotomazelli/washing-machine)
 [![Coverage Report](https://img.shields.io/badge/coverage-report-blue)](https://aluiziotomazelli.github.io/washing-machine/index.html)
@@ -24,7 +24,7 @@ An industrial-grade, open-source custom controller firmware for domestic top-loa
   * **`main` branch**: WS2812B 9-pixel Addressable RGB LED strip with smooth breathing animations.
   * **`discrete-leds` branch**: Classical discrete LED panel board pinout.
 * **Zero Dynamic Memory (0 Bytes Heap)**: Deterministic execution with zero heap fragmentation risk.
-* **Dual-Target Native PC Unit Testing**: 200 unit tests written in GoogleTest/GoogleMock executing in ~45 ms on PC.
+* **Dual-Target Native PC Unit Testing**: 203 unit tests written in GoogleTest/GoogleMock executing in ~45 ms on PC.
 * **Hardware Watchdog Protection**: AVR hardware WDT with early boot disarm (`.init3`), continuous runtime kicking, and reboot detection with buzzer acoustic alerts.
 
 ---
@@ -153,6 +153,10 @@ make compile-db
 
 While the core firmware is production-ready and fully operational, the following enhancements are planned for future releases:
 
+* **Linear Inductive Water Level Sensor (Frequency-Based)**:
+  * Replace electromechanical pressure switches with an electronic linear frequency pressure sensor (e.g. LG 6501EA1001R / Samsung DC96-01703A).
+  * Continuous real-time water column monitoring using a single GPIO Timer Input Capture / Interrupt (~21 kHz to ~27 kHz 5V square wave).
+  * Eliminate mechanical switch calibration headaches, contact bounce, and physical hysteresis while enabling effortless software-defined level calibration and leak detection.
 * **Energy-Saving Auto-Standby Mode**:
   * Dim or extinguish panel LEDs after 10 minutes of inactivity in `IDLE` state.
   * Instantly wake the UI on any button interaction.

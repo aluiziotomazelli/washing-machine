@@ -156,6 +156,7 @@ void setup()
         // Audible alert if reboot was caused by Watchdog freeze recovery
         if (recovered_from_wdt) {
             buzzer.play_pattern(ui::BuzzerPattern::DOUBLE_BEEP);
+            buzzer.play_pattern(ui::BuzzerPattern::DOUBLE_BEEP);
         }
     }
 }

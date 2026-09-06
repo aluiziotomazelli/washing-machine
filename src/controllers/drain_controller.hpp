@@ -23,10 +23,10 @@ public:
 
     /**
      * @brief Start tub drainage.
-     * @param bleed_duration_ms Additional pumping time after tub is detected empty (default 30s).
+     * @param bleed_duration_ms Additional pumping time after tub is detected empty (default 20s).
      * @param already_empty_duration_ms Pumping time if tub is already empty at start (default 0s).
      */
-    void start(uint32_t bleed_duration_ms = 30000, uint32_t already_empty_duration_ms = 0);
+    void start(uint32_t bleed_duration_ms = 20000, uint32_t already_empty_duration_ms = 0);
 
     void update();
     void pause();
@@ -47,7 +47,7 @@ private:
     hal::IWaterLevelSensor& water_sensor_;
     uint32_t timeout_ms_;
 
-    uint32_t bleed_duration_ms_{30000};
+    uint32_t bleed_duration_ms_{20000};
     uint32_t start_time_ms_{0};
     uint32_t bleed_start_ms_{0};
 

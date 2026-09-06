@@ -383,7 +383,7 @@ void WashCycleCoordinator::execute_step(CycleStep step)
 
     switch (step) {
     case CycleStep::FILL_MAIN:
-        fill_ctrl_.start(level_, false);
+        fill_ctrl_.start(level_, !softener_enabled_);
         break;
 
     case CycleStep::FILL_SOFTENER:
