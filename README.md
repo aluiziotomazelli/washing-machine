@@ -95,21 +95,22 @@ washing-machine/
 ## Wash Programs & Controls
 
 ### Programs
-1. **Normal Wash**: Main Fill $\rightarrow$ 18 min Agitation $\rightarrow$ Drain $\rightarrow$ Intermediate Spin (2 min) $\rightarrow$ Rinse $\rightarrow$ Final Spin (4 min).
-2. **Heavy Wash**: Main Fill $\rightarrow$ 8 min Gentle Agitation $\rightarrow$ 20 min Soak $\rightarrow$ 14 min Normal Agitation $\rightarrow$ Drain $\rightarrow$ Intermediate Spin (2 min) $\rightarrow$ Rinse $\rightarrow$ Final Spin.
+1. **Normal Wash**: Main Fill -> 18 min Agitation -> Drain -> Intermediate Spin (2 min) -> Rinse -> Final Spin (4 min).
+2. **Heavy Wash**: Main Fill -> 8 min Gentle Agitation -> 20 min Soak -> 14 min Normal Agitation -> Drain -> Intermediate Spin (2 min) -> Rinse -> Final Spin.
 3. **Rinse Only**:
-   * *Without Softener*: Fill $\rightarrow$ 7 min Agitation $\rightarrow$ Drain $\rightarrow$ Final Spin.
-   * *With Softener (Double Rinse)*: Fill $\rightarrow$ 5 min Agitation $\rightarrow$ Drain $\rightarrow$ Intermediate Spin (2 min) $\rightarrow$ Softener Fill $\rightarrow$ 2 min Gentle Agitation $\rightarrow$ 5 min Soak $\rightarrow$ 2 min Post-Agitation $\rightarrow$ Drain $\rightarrow$ Final Spin.
-4. **Spin Only**: Drain (with empty-tub fast-track) $\rightarrow$ Sprints $\rightarrow$ Continuous Cruise Spin (4 min).
+   * *Without Softener*: Fill -> 7 min Agitation -> Drain -> Final Spin.
+   * *With Softener (Double Rinse)*: Fill -> 5 min Agitation -> Drain -> Intermediate Spin (2 min) -> Softener Fill -> 2 min Gentle Agitation -> 5 min Soak -> 2 min Post-Agitation -> Drain -> Final Spin.
+4. **Spin Only**: Drain (with empty-tub fast-track) -> Sprints -> Continuous Cruise Spin (4 min).
 
 ### Button Controls
-* **Início / Pausa (Start/Pause)**:
+* **Start/Pause**:
   * *Click*: Start selected cycle / Pause running cycle / Resume paused cycle.
-  * *Double Click*: Advance (skip) currently active stage to the next stage.
-  * *Long Press (3 seconds upon boot)*: Enter **Field Service Diagnostic Mode**.
-* **Programa (Program)**: Cycle through Normal Wash $\rightarrow$ Heavy Wash $\rightarrow$ Rinse Only $\rightarrow$ Spin Only.
-* **Nível (Level)**: Cycle water level between Low $\rightarrow$ Medium $\rightarrow$ High.
-* **Amaciante (Softener)**: Toggle single rinse vs. double rinse with softener dispenser.
+  * *Long Click*: Advance (skip) currently active stage to the next stage.
+  * *Very Long Click*: Stop running cycle and resume to iddle.
+  * **Obs:** Timing of clicks is defined in `washing-machine.ino` by `static ui::ButtonConfig btn_cfg{...}`
+* **Program**: Cycle through Normal Wash -> Heavy Wash -> Rinse Only -> Spin Only.
+* **Level**: Cycle water level between Low -> Medium -> High.
+* **Softener**: Toggle single rinse vs. double rinse with softener dispenser.
 
 ---
 
