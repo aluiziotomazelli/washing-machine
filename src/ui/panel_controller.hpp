@@ -11,6 +11,10 @@ namespace hal {
 class ITimerHAL;
 }
 
+namespace persistence {
+class ICyclePersistence;
+}
+
 namespace ui {
 
 class DiagnosticController;
@@ -33,7 +37,8 @@ public:
         IBuzzer& buzzer,
         fsm::WashCycleCoordinator& coordinator,
         DiagnosticController* diag_ctrl = nullptr,
-        hal::ITimerHAL* timer_hal = nullptr
+        hal::ITimerHAL* timer_hal = nullptr,
+        persistence::ICyclePersistence* persistence = nullptr
     );
 
     void init();
@@ -60,8 +65,9 @@ private:
     fsm::WashCycleCoordinator& coordinator_;
     DiagnosticController* diag_ctrl_{nullptr};
     hal::ITimerHAL* timer_hal_{nullptr};
+    persistence::ICyclePersistence* persistence_{nullptr};
 
-    domain::WashProgram selected_program_{domain::WashProgram::NORMAL_WASH};
+    domain::WashProgram selected_program_{domain::WashProgram::RINSE_ONLY};
     domain::WaterLevel selected_level_{domain::WaterLevel::LOW_LEVEL};
     bool softener_enabled_{false};
     uint32_t diag_entry_press_start_ms_{0};

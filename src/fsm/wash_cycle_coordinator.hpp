@@ -8,6 +8,11 @@
 #include "../controllers/spin_controller.hpp"
 #include "../hal/interfaces/i_timer_hal.hpp"
 
+namespace persistence {
+class ICyclePersistence;
+struct CycleSnapshot;
+}
+
 namespace fsm {
 
 using domain::MachineError;
@@ -85,13 +90,15 @@ public:
         controllers::Agitator& agitator,
         controllers::DrainController& drain_ctrl,
         controllers::SpinController& spin_ctrl,
-        const CoordinatorConfig& config = CoordinatorConfig{});
+        const CoordinatorConfig& config = CoordinatorConfig{},
+        persistence::ICyclePersistence* persistence = nullptr);
 
     void init();
     void update();
 
     // Cycle Control Interface
     void start_cycle(WashProgram program, WaterLevel level, bool softener_enabled);
+    void resume_interrupted_cycle(const persistence::CycleSnapshot& snapshot);
     void pause_cycle();
     void resume_cycle();
     void advance_step();
@@ -103,10 +110,13 @@ public:
     WashStage get_current_stage() const { return current_stage_; }
     CycleStep get_current_step() const { return current_step_; }
     WashProgram get_program() const { return program_; }
+    WashProgram get_original_program() const { return original_program_; }
     WaterLevel get_level() const { return level_; }
     bool is_softener_enabled() const { return softener_enabled_; }
     uint8_t get_step_index() const { return step_index_; }
     uint8_t get_unbalance_recoveries() const { return unbalance_recoveries_; }
+
+    void set_persistence(persistence::ICyclePersistence* persistence) { persistence_ = persistence; }
 
 private:
     void plan_next_step();
@@ -121,6 +131,7 @@ private:
     controllers::DrainController& drain_ctrl_;
     controllers::SpinController& spin_ctrl_;
     CoordinatorConfig config_;
+    persistence::ICyclePersistence* persistence_{nullptr};
 
     // Macro State
     MachineState state_{MachineState::IDLE};
@@ -130,6 +141,7 @@ private:
 
     // Cycle Configuration
     WashProgram program_{WashProgram::NORMAL_WASH};
+    WashProgram original_program_{WashProgram::NORMAL_WASH};
     WaterLevel level_{WaterLevel::LOW_LEVEL};
     bool softener_enabled_{false};
 

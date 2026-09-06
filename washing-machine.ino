@@ -21,13 +21,19 @@
 #include "src/ui/diagnostic_controller.hpp"
 #include "src/ui/panel_controller.hpp"
 #include "src/hal/arduino/arduino_i2c_hal.hpp"
+#include "src/hal/arduino/arduino_eeprom_hal.hpp"
 #include "src/hal/mpu6050.hpp"
+#include "src/persistence/cycle_persistence_manager.hpp"
 
 // Hardware Abstraction Layer instances:
 static hal::ArduinoGpioHAL gpio_hal;
 static hal::ArduinoTimerHAL timer_hal;
 static hal::ArduinoWatchdogHAL watchdog_hal;
 static hal::ArduinoI2cHAL i2c_hal;
+static hal::ArduinoEepromHAL eeprom_hal;
+
+// Persistence Manager:
+static persistence::CyclePersistenceManager persistence_mgr(eeprom_hal);
 
 // Accelerometer Sensor & Vibration Monitor:
 static hal::Mpu6050 accel_sensor(i2c_hal);
@@ -75,7 +81,8 @@ static controllers::DrainController drain_ctrl(timer_hal, drain_pump, water_leve
 static controllers::SpinController spin_ctrl(timer_hal, drain_pump, motor, controllers::SpinConfig{}, &vib_monitor);
 
 // Central Cycle Coordinator (FSM):
-static fsm::WashCycleCoordinator coordinator(timer_hal, fill_ctrl, agitator, drain_ctrl, spin_ctrl);
+static fsm::WashCycleCoordinator
+    coordinator(timer_hal, fill_ctrl, agitator, drain_ctrl, spin_ctrl, fsm::CoordinatorConfig{}, &persistence_mgr);
 
 // Diagnostic Controller:
 static ui::DiagnosticController diag_ctrl(
@@ -89,8 +96,7 @@ static ui::DiagnosticController diag_ctrl(
     drain_pump,
     motor,
     timer_hal,
-    &vib_monitor
-);
+    &vib_monitor);
 
 // UI Panel Controller:
 static ui::PanelController panel_ctrl(
@@ -102,8 +108,8 @@ static ui::PanelController panel_ctrl(
     buzzer,
     coordinator,
     &diag_ctrl,
-    &timer_hal
-);
+    &timer_hal,
+    &persistence_mgr);
 
 void setup()
 {
@@ -132,11 +138,25 @@ void setup()
 
     // Initialize Coordinator & UI Panel Presentation
     coordinator.init();
-    panel_ctrl.init();
 
-    // Audible alert if reboot was caused by Watchdog freeze recovery
-    if (recovered_from_wdt) {
-        buzzer.play_pattern(ui::BuzzerPattern::DOUBLE_BEEP);
+    // Check for power-loss recovery snapshot from EEPROM
+    persistence::CycleSnapshot snapshot{};
+    bool has_saved_snapshot = persistence_mgr.load_latest(snapshot);
+
+    if (has_saved_snapshot && snapshot.is_running) {
+        // Automatic AC power-loss recovery (only beep if actively running, silent if was paused)
+        if (!snapshot.is_paused) {
+            buzzer.play_pattern(ui::BuzzerPattern::DOUBLE_BEEP);
+        }
+        coordinator.resume_interrupted_cycle(snapshot);
+        panel_ctrl.init();
+    }
+    else {
+        panel_ctrl.init();
+        // Audible alert if reboot was caused by Watchdog freeze recovery
+        if (recovered_from_wdt) {
+            buzzer.play_pattern(ui::BuzzerPattern::DOUBLE_BEEP);
+        }
     }
 }
 
