@@ -490,3 +490,39 @@ TEST_F(DiagnosticControllerTest, SkipsLedPanelShowWhenBuzzerIsPlaying)
 
     diag_ctrl.update();
 }
+
+TEST_F(DiagnosticControllerTest, ResetsVibrationMonitorOnEnterNextStepAndSpinToggle)
+{
+    // Entering diagnostic mode resets vibration monitor
+    EXPECT_CALL(vib_monitor, reset()).Times(1);
+    diag_ctrl.enter();
+
+    // Navigating to next step resets vibration monitor
+    EXPECT_CALL(vib_monitor, reset()).Times(1);
+    EXPECT_CALL(btn_program, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+    diag_ctrl.update();
+
+    // Navigating 5 more steps to reach SPIN_TEST
+    EXPECT_CALL(vib_monitor, reset()).Times(5);
+    EXPECT_CALL(btn_program, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+    for (int i = 0; i < 5; ++i) {
+        diag_ctrl.update();
+    }
+    EXPECT_EQ(diag_ctrl.get_current_step(), DiagnosticStep::SPIN_TEST);
+
+    // Starting spin test resets vibration monitor
+    EXPECT_CALL(vib_monitor, reset()).Times(1);
+    EXPECT_CALL(btn_start, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+    diag_ctrl.update();
+    EXPECT_TRUE(diag_ctrl.is_spin_active());
+}
