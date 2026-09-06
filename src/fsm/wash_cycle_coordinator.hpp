@@ -19,7 +19,8 @@ using domain::WaterLevel;
 /**
  * @brief Discrete operational step types within an orchestrated wash cycle.
  */
-enum class CycleStep : uint8_t {
+enum class CycleStep : uint8_t
+{
     NONE = 0,
     FILL_MAIN,
     FILL_SOFTENER,
@@ -39,42 +40,44 @@ enum class CycleStep : uint8_t {
 /**
  * @brief Configuration parameters for cycle timings (in seconds or milliseconds).
  */
-struct CoordinatorConfig {
+struct CoordinatorConfig
+{
     // Stage Pause & Settle
-    uint32_t stage_settle_ms{4000};        // 4s quiet delay between major stages
+    uint32_t stage_settle_ms{4000}; // 4s quiet delay between major stages
 
     // Wash Stage Agitation & Soak Durations (in seconds)
-    uint32_t normal_wash_agitate_sec{18 * 60};     // 18 min continuous agitation
-    uint32_t heavy_wash_agitate1_sec{8 * 60};      // 8 min gentle agitation
-    uint32_t heavy_wash_soak_sec{20 * 60};         // 20 min soak
-    uint32_t heavy_wash_agitate2_sec{14 * 60};     // 14 min normal agitation
+    uint32_t normal_wash_agitate_sec{18 * 60}; // 18 min continuous agitation
+    uint32_t heavy_wash_agitate1_sec{8 * 60};  // 8 min gentle agitation
+    uint32_t heavy_wash_soak_sec{20 * 60};     // 20 min soak
+    uint32_t heavy_wash_agitate2_sec{14 * 60}; // 14 min normal agitation
 
     // Rinse Stage Durations (in seconds)
-    uint32_t single_rinse_agitate_sec{7 * 60};     // 7 min single rinse
-    uint32_t double_rinse_1_agitate_sec{5 * 60};   // 5 min 1st rinse
-    uint32_t intermediate_spin_sec{2 * 60};       // 2 min intermediate spin (after wash & rinse)
-    uint32_t double_rinse_2_agitate_sec{2 * 60};   // 2 min gentle rinse with softener
-    uint32_t double_rinse_2_soak_sec{5 * 60};      // 5 min softener soak
+    uint32_t single_rinse_agitate_sec{7 * 60};        // 7 min single rinse
+    uint32_t double_rinse_1_agitate_sec{5 * 60};      // 5 min 1st rinse
+    uint32_t double_rinse_2_agitate_sec{2 * 60};      // 2 min gentle rinse with softener
+    uint32_t double_rinse_2_soak_sec{5 * 60};         // 5 min softener soak
     uint32_t double_rinse_2_agitate_post_sec{2 * 60}; // 2 min post-soak agitation
 
-    // Final Spin Duration (in seconds)
-    uint32_t final_spin_sec{4 * 60};               // 4 min final spin
+    // Spin Durations (in seconds)
+    uint32_t intermediate_spin_sec{2 * 60}; // 2 min intermediate spin (after wash & rinse)
+    uint32_t final_spin_sec{4 * 60};        // 4 min final spin
 
     // Unbalance Hydraulic Recovery
-    uint8_t max_unbalance_recoveries{1};          // 1 hydraulic recovery attempt before latching error
-    uint32_t unbalance_agitate_sec{30};           // 30s brief agitation to redistribute clothes
+    uint8_t max_unbalance_recoveries{1}; // 1 hydraulic recovery attempt before latching error
+    uint32_t unbalance_agitate_sec{30};  // 30s brief agitation to redistribute clothes
     domain::WaterLevel unbalance_fill_level{domain::WaterLevel::LOW_LEVEL}; // Minimum water level
 };
 
 /**
  * @class WashCycleCoordinator
  * @brief Central Finite State Machine (FSM) coordinator orchestrating laundry cycle recipes.
- * 
+ *
  * Adheres strictly to the Single Responsibility Principle: does not manipulate pins or relays.
  * Instead, it delegates physical execution to dedicated atomic process controllers
  * (FillController, Agitator, DrainController, SpinController).
  */
-class WashCycleCoordinator {
+class WashCycleCoordinator
+{
 public:
     WashCycleCoordinator(
         hal::ITimerHAL& timer_hal,
@@ -82,8 +85,7 @@ public:
         controllers::Agitator& agitator,
         controllers::DrainController& drain_ctrl,
         controllers::SpinController& spin_ctrl,
-        const CoordinatorConfig& config = CoordinatorConfig{}
-    );
+        const CoordinatorConfig& config = CoordinatorConfig{});
 
     void init();
     void update();
