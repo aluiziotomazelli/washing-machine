@@ -15,7 +15,8 @@
 8. [Chapter 7: The WS2812B Addressable LED Engine, Hardware Re-spin & The AVR Interrupt Collision Dilemma](#chapter-7-the-ws2812b-addressable-led-engine-hardware-re-spin--the-avr-interrupt-collision-dilemma)
 9. [Chapter 8: The Autonomous Safety Net - Hardware Watchdog, MPU-6050 Accelerometer, and Two-Tier Dynamic Anti-Walking Spin Control](#chapter-8-the-autonomous-safety-net---hardware-watchdog-mpu-6050-accelerometer-and-two-tier-dynamic-anti-walking-spin-control)
 10. [Chapter 9: Field Service Self-Test & Diagnostic Architecture (v0.6.0)](#chapter-9-field-service-self-test--diagnostic-architecture-v060)
-11. [Chapter 10: Hardware Migration to 32-bit Architecture (ESP32-C3) *(Upcoming)*](#chapter-10-hardware-migration-to-32-bit-architecture-esp32-c3)
+11. [Chapter 10: Non-Volatile State Persistence & AC Power-Loss Recovery (v0.7.0)](#chapter-10-non-volatile-state-persistence--ac-power-loss-recovery-v070)
+12. [Chapter 11: Hardware Migration to 32-bit Architecture (ESP32-C3) *(Upcoming)*](#chapter-11-hardware-migration-to-32-bit-architecture-esp32-c3)
 
 ---
 
@@ -796,24 +797,126 @@ To eliminate the need for external service dongles or programming headers:
   - Both [`DiscreteLedPanel`](../src/ui/discrete_led_panel.hpp) and [`StripLedPanel`](../src/ui/strip_led_panel.hpp) implement semantic diagnostic rendering.
   - On the WS2812B strip, the real-time MPU-6050 accelerometer amplitude is rendered as a smooth, multi-color **dynamic VU-meter** across the pixel array, allowing technicians to assess suspension health visually without connecting an oscilloscope.
 - **Single-Button Load Toggling & Step Advancement:** Technicians cycle through hardware tests using the **Program** button and toggle actuators on/off with the **Start/Pause** button.
+---
+
+## Chapter 10: Non-Volatile State Persistence & AC Power-Loss Recovery (v0.7.0)
+
+Domestic washing machines operate in an electrically hostile environment subject to AC mains brownouts, localized voltage sags, power grid outages, or accidental disconnection of the wall plug. In standard consumer appliances, power interruptions cause the controller to reset to default factory settings, abandoning a drum filled with soapy water and wet laundry—wasting water, detergent, and energy while forcing the user to manually re-drain or guess which wash stage was running.
+
+Milestone `v0.7.0` introduces an industrial-grade **Non-Volatile State Persistence & AC Power-Loss Recovery subsystem**, enabling the machine to survive sudden power outages and seamlessly resume or preserve cycle state upon AC restoration.
+
+```mermaid
+graph TD
+    subgraph EEPROM_Layout ["EEPROM Ring Buffer Storage (64 Slots × 10 Bytes = 640 B)"]
+        S0["Slot 0: [Seq 191] [CRC OK]"]
+        S1["Slot 1: [Seq 192] [CRC OK] (Latest)"]
+        S2["Slot 2: [Seq 128] [Old]"]
+        SN["Slot 63: [Seq 190] [CRC OK]"]
+    end
+
+    subgraph Boot_Sequence ["Boot & Recovery Flow (washing-machine.ino)"]
+        BOOT["Power On / MCU Reset"] --> SCAN["Scan 64 Slots<br>Validate CRC-8 & Magic Byte (0xA5)"]
+        SCAN --> FIND["Identify Latest Transaction<br>(Signed 16-bit Monotonic Wrap Difference)"]
+        FIND --> RESTORE{"Examine Snapshot State"}
+        RESTORE -->|run_state == RUNNING| RESUME_RUN["Resume RUNNING<br>Acoustic Double-Beep<br>Engage Actuators"]
+        RESTORE -->|run_state == PAUSED| RESUME_PAUSE["Resume PAUSED<br>Silent (0 dB, No Buzzers/Motors)<br>Pulse Panel LEDs Gently"]
+        RESTORE -->|run_state == STOPPED| RESTORE_IDLE["Restore User Preferences<br>(Last Program & Water Level)<br>Standby in IDLE"]
+    end
+
+    S1 -.->|Read on Boot| SCAN
+```
 
 ---
 
-### 4. Milestone Metrics & Readiness (v0.6.0)
+### 1. The EEPROM Silicon Endurance Challenge & Wear Leveling
 
-| Metric | Legacy v0.1.0 | FSM v0.3.1 (Discrete) | Strip v0.4.0 (WS2812) | Safety & Sensing v0.5.0 | Field Diagnostics v0.6.0 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Flash ROM** | 7,130 B (23%) | 14,976 B (48%) | 15,822 B (51%) | 22,120 B (72%) | **23,770 B (77%)** |
-| **Static SRAM** | 358 B (17%) | 721 B (35%) | 821 B (40%) | 1,383 B (67%) | **1,287 B (62%)** |
-| **Dynamic Heap** | 0 B | 0 B | 0 B | 0 B | **0 B (Zero Heap)** |
-| **Automated Tests** | 0 tests | 80 tests | 100 tests | 138 tests | **169 tests (100% pass, 41 ms)** |
-| **Watchdog Protection** | None | None | None | Hardware AVR WDT | **Hardware AVR WDT (.init3 hook)** |
-| **Vibration Sensing** | None | None | None | I2C MPU-6050 (Dual-tier) | **I2C MPU-6050 (Dual-tier & VU-meter)** |
-| **Field Self-Test** | None | None | None | None | **Interactive 7-Step Diagnostic Mode** |
-| **Free GPIOs** | 0 pins | 0 pins | A4/A5 I2C + A6/A7 Free | A6/A7 Free (Analog-only) | **A6/A7 Free (Analog-only)** |
+The ATmega328P microcontroller contains **1,024 bytes (1 KB) of internal EEPROM**. However, EEPROM technology is physically limited by gate oxide degradation during write/erase cycles:
+* **Manufacturer Rating:** Typical maximum of **100,000 write cycles** per byte.
+* **The Naive Architecture Failure:** If the firmware naively wrote machine state on a 1-second timer tick or to a single fixed memory location on every stage change, the EEPROM cells at that address would burn out within weeks of heavy use.
+
+To eliminate localized cell fatigue, the [`CyclePersistenceManager`](../src/persistence/cycle_persistence_manager.hpp) implements a **64-slot circular ring buffer with continuous wear leveling**:
+
+| Byte Offset | Field | Type | Description |
+| :---: | :--- | :--- | :--- |
+| **0 .. 1** | `seq_num` | `uint16_t` (Little-Endian) | Monotonic transaction sequence counter |
+| **2** | `program` | `uint8_t` (`WashProgram`) | Selected program enum (Normal, Heavy, Rinse, Spin) |
+| **3** | `level` | `uint8_t` (`WaterLevel`) | Selected water level enum (Low, Medium, High) |
+| **4** | `step_index` | `uint8_t` (0 .. 9) | Active recipe step index in current cycle |
+| **5** | `in_rinse_subcycle` | `uint8_t` (Boolean 0/1) | Disambiguates main wash agitation from rinse agitation |
+| **6** | `softener_enabled` | `uint8_t` (Boolean 0/1) | Extra Softener / Double Rinse configuration flag |
+| **7** | `run_state` | `uint8_t` (Enum) | Execution state (`0 = STOPPED`, `1 = RUNNING`, `2 = PAUSED`) |
+| **8** | `magic` | `uint8_t` (`0xA5`) | Magic marker byte (rejects uninitialized `0xFF` or `0x00`) |
+| **9** | `crc` | `uint8_t` (CRC-8) | ATM-8 polynomial ($x^8 + x^2 + x + 1$, `0x07`) over bytes 0..8 |
+
+**Endurance Multiplication:**
+$$\text{Total System Write Endurance} = 64 \text{ slots} \times 100,000 \text{ cycles/slot} = 6,400,000 \text{ persistent writes}$$
+
+With approximately 5 to 10 discrete state transitions recorded during a complete multi-stage wash cycle, the physical lifespan of the on-chip EEPROM exceeds **640,000 wash cycles** (equivalent to centuries of daily operation).
 
 ---
 
-## Chapter 10: Hardware Migration to 32-bit Architecture (ESP32-C3) *(Upcoming)*
+### 2. Pointerless Zero-Wear Discovery & 16-Bit Sequence Wrap Scanning
+
+Storing a "current write head" index at a fixed memory address would defeat wear leveling by burning out the pointer cell. The storage engine is completely **pointerless**:
+1. **Boot Slot Scanning:** On boot initialization, [`CyclePersistenceManager::init()`](../src/persistence/cycle_persistence_manager.cpp) reads all 64 slots sequentially via [`IEepromHAL`](../src/hal/interfaces/i_eeprom_hal.hpp).
+2. **CRC-8 Verification:** Each candidate slot is validated against its magic byte (`0xA5`) and CRC-8 checksum. Corrupted slots (e.g. caused by an AC power drop during an active write) are immediately discarded.
+3. **Monotonic Sequence Wrap-Around Math:**
+   To reliably identify the latest record when the 16-bit sequence counter wraps from $65,535$ to $0$, the manager calculates signed two's complement differences:
+   ```cpp
+   int16_t diff = static_cast<int16_t>(candidate.seq_num - best_seq);
+   if (diff > 0) {
+       best_seq = candidate.seq_num;
+       best_slot = slot;
+   }
+   ```
+4. **Ring Buffer Advance:** The next write automatically targets `(best_slot + 1) % 64` with `seq_num = best_seq + 1`.
+
+---
+
+### 3. Event-Driven Write Policy (Zero Idle Fatigue)
+
+To ensure zero unnecessary wear:
+* **No EEPROM writes occur when users interact with panel buttons in `IDLE`** (e.g. browsing wash programs or changing water levels).
+* Writes are dispatched strictly on **discrete lifecycle transition events**:
+  1. **Cycle Start:** User initiates wash (`run_state = RUNNING`).
+  2. **Step Advancement:** FSM completes a stage or user skips a step (`step_index++`).
+  3. **User Pause:** User pauses the running machine (`run_state = PAUSED`).
+  4. **User Resume:** User resumes the paused machine (`run_state = RUNNING`).
+  5. **Cycle Completion / Stop:** Machine completes naturally or user aborts (`run_state = STOPPED`).
+
+---
+
+### 4. Smart Power-Loss Resumption & The Overnight Soak Scenario
+
+The resumption logic in [`washing-machine.ino`](../washing-machine.ino) strictly distinguishes actively running states from intentionally paused states:
+
+1. **Actively Running Outage Recovery (`run_state == RUNNING`):**
+   * If power cuts out while the machine was filling, agitating, or spinning, the system detects an unexpected drop.
+   * Upon AC return, the controller enters [`MachineState::RUNNING`](../src/domain/wash_types.hpp), sounds an acoustic **Double-Beep** alert, and immediately resumes the recipe from the exact step that was interrupted.
+2. **The "Overnight Soak" Protection (`run_state == PAUSED`):**
+   * *The Problem:* A user loads laundry in the evening, starts a cycle, pauses during the soak stage to let garments soak overnight, and goes to sleep. If a grid glitch occurs at 3:00 AM, a naive auto-resume would instantly energize the 1/3 HP motor, start splashing water, and sound loud beepers in the middle of the night.
+   * *The Solution:* When restoring a snapshot with `run_state == PAUSED`, the controller resumes strictly into [`MachineState::PAUSED`](../src/domain/wash_types.hpp) in **complete acoustic silence (0 dB, no buzzer, no motor or valve actuation)**. The panel LEDs gently breathe in amber, silently awaiting the user to press Start the next morning.
+3. **Preference Memory in Standby (`run_state == STOPPED`):**
+   * If the machine was idle or had finished its previous cycle when power dropped, boot restoration restores the user's preferred program, water level, and softener preferences into the UI in `MachineState::IDLE`.
+
+---
+
+### 5. Milestone Metrics & Readiness (v0.7.0)
+
+| Metric | Legacy v0.1.0 | FSM v0.3.1 (Discrete) | Strip v0.4.0 (WS2812) | Safety & Sensing v0.5.0 | Field Diagnostics v0.6.0 | Persistence v0.7.0 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Flash ROM** | 7,130 B (23%) | 14,976 B (48%) | 15,822 B (51%) | 22,120 B (72%) | 23,770 B (77%) | **27,094 B (88%)** |
+| **Static SRAM** | 358 B (17%) | 721 B (35%) | 821 B (40%) | 1,383 B (67%) | 1,287 B (62%) | **1,357 B (66%)** |
+| **Dynamic Heap** | 0 B | 0 B | 0 B | 0 B | 0 B (Zero Heap) | **0 B (Zero Heap)** |
+| **Automated Tests** | 0 tests | 80 tests | 100 tests | 138 tests | 169 tests | **198 tests (100% pass, 45 ms)** |
+| **State Persistence** | None | None | None | None | None | **64-Slot Ring Buffer (CRC-8)** |
+| **Watchdog Protection** | None | None | None | Hardware AVR WDT | Hardware AVR WDT (.init3) | **Hardware AVR WDT (.init3)** |
+| **Vibration Sensing** | None | None | None | I2C MPU-6050 (Dual-tier) | I2C MPU-6050 (Dual-tier & VU) | **I2C MPU-6050 (Dual-tier & VU)** |
+| **Field Self-Test** | None | None | None | None | Interactive 7-Step Diag | **Interactive 7-Step Diag** |
+| **Free GPIOs** | 0 pins | 0 pins | A4/A5 I2C + A6/A7 | A6/A7 Free (Analog-only) | A6/A7 Free (Analog-only) | **A6/A7 Free (Analog-only)** |
+
+---
+
+## Chapter 11: Hardware Migration to 32-bit Architecture (ESP32-C3) *(Upcoming)*
 *(Coming in future releases: Native FreeRTOS multitasking, telemetry over Wi-Fi/BLE, and migration to modern 32-bit RISC-V silicon).*
 
