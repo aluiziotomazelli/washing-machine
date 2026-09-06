@@ -897,7 +897,7 @@ The resumption logic in [`washing-machine.ino`](../washing-machine.ino) strictly
    * *The Problem:* A user loads laundry in the evening, starts a cycle, pauses during the soak stage to let garments soak overnight, and goes to sleep. If a grid glitch occurs at 3:00 AM, a naive auto-resume would instantly energize the 1/3 HP motor, start splashing water, and sound loud beepers in the middle of the night.
    * *The Solution:* When restoring a snapshot with `run_state == PAUSED`, the controller resumes strictly into [`MachineState::PAUSED`](../src/domain/wash_types.hpp) in **complete acoustic silence (0 dB, no buzzer, no motor or valve actuation)**. The panel LEDs gently breathe in amber, silently awaiting the user to press Start the next morning.
 3. **Preference Memory in Standby (`run_state == STOPPED`):**
-   * If the machine was idle or had finished its previous cycle when power dropped, boot restoration restores the user's preferred program, water level, and softener preferences into the UI in `MachineState::IDLE`.
+   * If the machine was idle or had finished its previous cycle when power dropped, boot restoration restores the user's last used program, water level, and softener preferences into the UI in `MachineState::IDLE`.
 
 ---
 
