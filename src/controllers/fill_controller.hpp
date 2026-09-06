@@ -20,7 +20,7 @@ public:
         hal::IDigitalOutput& valve_main,
         hal::IDigitalOutput& valve_softener,
         hal::IWaterLevelSensor& water_sensor,
-        uint32_t timeout_ms = 720000 // 12 minutes default
+        uint32_t timeout_ms = 20UL * 60 * 1000 // 20 minutes default
     );
 
     void start(domain::WaterLevel target, bool use_softener = false);
