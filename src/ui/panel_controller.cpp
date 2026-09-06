@@ -268,14 +268,17 @@ void PanelController::sync_state_with_coordinator()
             led_panel_.set_stage(domain::WashStage::IDLE);
             led_panel_.set_program(selected_program_);
         }
-        else if (current_state == domain::MachineState::RUNNING) {
+        else if (current_state == domain::MachineState::RUNNING ||
+                 current_state == domain::MachineState::PAUSED) {
             led_panel_.set_stage(current_stage);
         }
 
         prev_state_ = current_state;
         prev_stage_ = current_stage;
     }
-    else if (current_state == domain::MachineState::RUNNING && prev_stage_ != current_stage) {
+    else if ((current_state == domain::MachineState::RUNNING ||
+              current_state == domain::MachineState::PAUSED) &&
+             prev_stage_ != current_stage) {
         led_panel_.set_stage(current_stage);
         prev_stage_ = current_stage;
     }

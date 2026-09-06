@@ -541,3 +541,27 @@ TEST_F(PanelControllerTest, UpdatesSelectionInRamWithoutSavingPersistenceWhenBut
     custom_panel.update();
     EXPECT_TRUE(custom_panel.is_softener_enabled());
 }
+
+TEST_F(PanelControllerTest, SynchronizesStageLedWhenEnteringPausedStateDirectlyOnBoot)
+{
+    // Simulate power outage resumption in PAUSED state
+    persistence::CycleSnapshot snapshot{};
+    snapshot.program = WashProgram::NORMAL_WASH;
+    snapshot.level = WaterLevel::MEDIUM_LEVEL;
+    snapshot.step_index = 1; // AGITATE_NORMAL in WASH stage
+    snapshot.in_rinse_subcycle = false;
+    snapshot.is_running = true;
+    snapshot.is_paused = true;
+
+    coordinator.resume_interrupted_cycle(snapshot);
+    EXPECT_EQ(coordinator.get_state(), MachineState::PAUSED);
+    EXPECT_EQ(coordinator.get_current_stage(), WashStage::WASH);
+
+    panel_ctrl.init();
+
+    // When panel_ctrl updates, it must set both machine state (PAUSED) and stage (WASH)
+    EXPECT_CALL(led_panel, set_machine_state(MachineState::PAUSED, MachineError::NONE)).Times(1);
+    EXPECT_CALL(led_panel, set_stage(WashStage::WASH)).Times(1);
+
+    panel_ctrl.update();
+}
