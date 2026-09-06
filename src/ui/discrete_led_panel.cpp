@@ -122,6 +122,9 @@ void DiscreteLedPanel::set_program(WashProgram program)
         write_pin(pins_.rinse, false);
         write_pin(pins_.spin, true);
         break;
+
+    default:
+        break;
     }
 }
 

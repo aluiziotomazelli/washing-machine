@@ -3,6 +3,7 @@
 
 #include "ui/panel_controller.hpp"
 #include "ui/diagnostic_controller.hpp"
+#include "mocks/mock_cycle_persistence.hpp"
 #include "mocks/mock_button.hpp"
 #include "mocks/mock_buzzer.hpp"
 #include "mocks/mock_led_panel.hpp"
@@ -476,4 +477,67 @@ TEST_F(PanelControllerTest, ExitsDiagnosticModeAndRestoresIdlePanelState)
 
     panel_ctrl.update();
     EXPECT_FALSE(panel_ctrl.is_diagnostic_active());
+}
+
+TEST_F(PanelControllerTest, RestoresUserPreferencesFromPersistenceOnInit)
+{
+    mocks::MockCyclePersistence mock_pers;
+    persistence::CycleSnapshot saved_pref{};
+    saved_pref.program = WashProgram::HEAVY_WASH;
+    saved_pref.level = WaterLevel::HIGH_LEVEL;
+    saved_pref.softener_enabled = true;
+    saved_pref.is_running = false;
+
+    EXPECT_CALL(mock_pers, load_latest(_))
+        .WillOnce(DoAll(SetArgReferee<0>(saved_pref), Return(true)));
+
+    PanelController custom_panel(
+        btn_start, btn_program, btn_level, btn_softener, led_panel, buzzer, coordinator,
+        &diag_ctrl, &mock_timer, &mock_pers
+    );
+
+    EXPECT_CALL(led_panel, set_program(WashProgram::HEAVY_WASH));
+    EXPECT_CALL(led_panel, set_selected_level(WaterLevel::HIGH_LEVEL));
+    EXPECT_CALL(led_panel, set_softener(true));
+
+    custom_panel.init();
+
+    EXPECT_EQ(custom_panel.get_selected_program(), WashProgram::HEAVY_WASH);
+    EXPECT_EQ(custom_panel.get_selected_level(), WaterLevel::HIGH_LEVEL);
+    EXPECT_TRUE(custom_panel.is_softener_enabled());
+}
+
+TEST_F(PanelControllerTest, UpdatesSelectionInRamWithoutSavingPersistenceWhenButtonsClickedInIdle)
+{
+    mocks::MockCyclePersistence mock_pers;
+    PanelController custom_panel(
+        btn_start, btn_program, btn_level, btn_softener, led_panel, buzzer, coordinator,
+        &diag_ctrl, &mock_timer, &mock_pers
+    );
+
+    custom_panel.init(); // selected_program = RINSE_ONLY, level = LOW_LEVEL, softener = false
+
+    // Persistence should NOT be called when browsing buttons in IDLE
+    EXPECT_CALL(mock_pers, save_user_selection(_, _, _)).Times(0);
+
+    // Clicking program button should cycle to SPIN_ONLY in RAM
+    EXPECT_CALL(btn_program, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+    custom_panel.update();
+    EXPECT_EQ(custom_panel.get_selected_program(), WashProgram::SPIN_ONLY);
+
+    // Clicking water level button should cycle to MEDIUM_LEVEL in RAM
+    EXPECT_CALL(btn_level, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+    custom_panel.update();
+    EXPECT_EQ(custom_panel.get_selected_level(), WaterLevel::MEDIUM_LEVEL);
+
+    // Clicking softener button should toggle softener in RAM
+    EXPECT_CALL(btn_softener, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+    custom_panel.update();
+    EXPECT_TRUE(custom_panel.is_softener_enabled());
 }

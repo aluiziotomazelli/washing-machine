@@ -1,7 +1,7 @@
 # Clean C++ Washing Machine Controller
 
 [![CI - Host Tests & Firmware Build](https://github.com/aluiziotomazelli/washing-machine/actions/workflows/ci.yml/badge.svg)](https://github.com/aluiziotomazelli/washing-machine/actions/workflows/ci.yml)
-[![Unit Tests](https://img.shields.io/badge/tests-173%20passed-brightgreen)](https://github.com/aluiziotomazelli/washing-machine)
+[![Unit Tests](https://img.shields.io/badge/tests-198%20passed-brightgreen)](https://github.com/aluiziotomazelli/washing-machine)
 [![Heap Allocation](https://img.shields.io/badge/heap-0%20bytes-blue)](https://github.com/aluiziotomazelli/washing-machine)
 [![Target](https://img.shields.io/badge/target-ATmega328P%20%2F%2016MHz-orange)](https://github.com/aluiziotomazelli/washing-machine)
 [![Coverage Report](https://img.shields.io/badge/coverage-report-blue)](https://aluiziotomazelli.github.io/washing-machine/index.html)
@@ -13,6 +13,7 @@ An industrial-grade, open-source custom controller firmware for domestic top-loa
 ## Key Features
 
 * **Event-Driven Non-Blocking State Machine**: Zero `delay()` calls or blocking loops throughout the entire codebase. Every process runs concurrently with predictable timing.
+* **Non-Volatile State Persistence & AC Power-Loss Recovery**: 64-slot wear-leveling circular ring buffer with CRC-8 data integrity validation in EEPROM. Automatically resumes interrupted wash cycles after power outages, intelligently distinguishes running vs. user-paused states (preventing unexpected midnight restarts during overnight soaks), and preserves user program/water level preferences.
 * **Real-Time Out-of-Balance Sensing**: 50 Hz digital signal processing on the I2C bus via an MPU-6050 accelerometer with gravity offset rejection and peak-to-peak envelope windowing.
 * **Multi-Tier Dynamic Unbalance Mitigation**:
   1. *Dry Coast-Down Retry*: Stops motor, keeps pump active for 10s until 0 RPM, and retries spin sprints.
@@ -23,7 +24,7 @@ An industrial-grade, open-source custom controller firmware for domestic top-loa
   * **`main` branch**: WS2812B 9-pixel Addressable RGB LED strip with smooth breathing animations.
   * **`discrete-leds` branch**: Classical discrete LED panel board pinout.
 * **Zero Dynamic Memory (0 Bytes Heap)**: Deterministic execution with zero heap fragmentation risk.
-* **Dual-Target Native PC Unit Testing**: 173 unit tests written in GoogleTest/GoogleMock executing in ~45 ms on PC.
+* **Dual-Target Native PC Unit Testing**: 198 unit tests written in GoogleTest/GoogleMock executing in ~45 ms on PC.
 * **Hardware Watchdog Protection**: AVR hardware WDT with early boot disarm (`.init3`), continuous runtime kicking, and reboot detection with buzzer acoustic alerts.
 
 ---
@@ -78,13 +79,17 @@ washing-machine/
 │   │   ├── pressure_switch_sensor.hpp   # 3-level debounced electromechanical pressure switch reader
 │   │   ├── mpu6050.hpp                  # Low-overhead I2C accelerometer driver with auto-detection
 │   │   └── ws2812_strip.hpp             # Handcrafted AVR assembly 800 kHz zero-heap WS2812B driver
+│   ├── persistence/                     # Non-volatile state persistence & wear leveling
+│   │   ├── interfaces/
+│   │   │   └── i_cycle_persistence.hpp  # Persistence interface contract
+│   │   └── cycle_persistence_manager.hpp# 64-slot circular ring buffer with CRC-8 & wear leveling
 │   └── ui/                              # User Interface & Diagnostics
 │       ├── button.hpp                   # Debounce, short-click, long-click, and double-click state machine
 │       ├── buzzer.hpp                   # Non-blocking acoustic melody and alert engine
 │       ├── diagnostic_controller.hpp    # 7-step interactive technician diagnostic controller
 │       ├── strip_led_panel.hpp          # WS2812B RGB visual presentation engine
 │       └── discrete_led_panel.hpp       # Discrete GPIO LED visual presentation engine
-├── test/                                # GoogleTest / GoogleMock PC unit test suite (172 tests)
+├── test/                                # GoogleTest / GoogleMock PC unit test suite (198 tests)
 └── docs/                                # In-depth documentation & engineering manuals
     ├── case-study.md                    # Complete engineering case study (from spaghetti to clean C++)
     └── technical-manual.md              # Field technician service & diagnostic manual
@@ -127,7 +132,7 @@ make build
 # 2. Upload firmware to the board via USB serial:
 make flash PORT=/dev/ttyUSB0
 
-# 3. Run all 172 native Host Unit Tests on your PC (GoogleTest / GoogleMock):
+# 3. Run all 198 native Host Unit Tests on your PC (GoogleTest / GoogleMock):
 make test
 
 # 4. Generate local HTML code coverage report (test/coverage/index.html):
@@ -148,10 +153,6 @@ make compile-db
 
 While the core firmware is production-ready and fully operational, the following enhancements are planned for future releases:
 
-* **EEPROM Power-Loss Recovery & State Persistence**:
-  * Periodically snapshot active cycle state, program, level, and running flags to non-volatile EEPROM.
-  * Automatically resume interrupted wash cycles after power outages upon AC mains restoration.
-  * Restore the last user-selected program and level on boot instead of defaulting to Normal Wash.
 * **Energy-Saving Auto-Standby Mode**:
   * Dim or extinguish panel LEDs after 10 minutes of inactivity in `IDLE` state.
   * Instantly wake the UI on any button interaction.

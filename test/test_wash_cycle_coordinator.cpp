@@ -9,6 +9,7 @@
 #include "controllers/drain_controller.hpp"
 #include "controllers/spin_controller.hpp"
 #include "mocks/mock_vibration_monitor.hpp"
+#include "mocks/mock_cycle_persistence.hpp"
 #include "fsm/wash_cycle_coordinator.hpp"
 
 using ::testing::NiceMock;
@@ -435,4 +436,128 @@ TEST_F(WashCycleCoordinatorTest, StopCycleFromErrorStateResetsToIdle)
     EXPECT_EQ(coordinator.get_state(), domain::MachineState::IDLE);
     EXPECT_EQ(coordinator.get_error(), domain::MachineError::NONE);
     EXPECT_FALSE(fill_ctrl.has_error());
+}
+
+TEST_F(WashCycleCoordinatorTest, PersistsProgressAtStepTransitionsAndClearsOnFinish)
+{
+    mocks::MockCyclePersistence mock_pers;
+    coordinator.set_persistence(&mock_pers);
+
+    // Step 0 (DRAIN) of SPIN_ONLY should save progress
+    EXPECT_CALL(mock_pers, save_cycle_progress(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false, 0, false, false)).Times(1);
+    coordinator.start_cycle(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false);
+
+    // Step 1 (SPIN_FINAL) should save progress
+    EXPECT_CALL(mock_pers, save_cycle_progress(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false, 1, false, false)).Times(1);
+    coordinator.advance_step();
+
+    // Advance past final step finishes cycle and saves finished
+    EXPECT_CALL(mock_pers, save_cycle_finished(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false)).Times(1);
+    coordinator.advance_step();
+
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::FINISHED);
+}
+
+TEST_F(WashCycleCoordinatorTest, StopCycleCallsSaveCycleFinished)
+{
+    mocks::MockCyclePersistence mock_pers;
+    coordinator.set_persistence(&mock_pers);
+
+    EXPECT_CALL(mock_pers, save_cycle_progress(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::HIGH_LEVEL, true, 0, false, false)).Times(1);
+    coordinator.start_cycle(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::HIGH_LEVEL, true);
+
+    EXPECT_CALL(mock_pers, save_cycle_finished(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::HIGH_LEVEL, true)).Times(1);
+    coordinator.stop_cycle();
+
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::IDLE);
+}
+
+TEST_F(WashCycleCoordinatorTest, PausingAndResumingCyclePersistsPausedFlag)
+{
+    mocks::MockCyclePersistence mock_pers;
+    coordinator.set_persistence(&mock_pers);
+
+    EXPECT_CALL(mock_pers, save_cycle_progress(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false, 0, false, false)).Times(1);
+    coordinator.start_cycle(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false);
+
+    // Pause cycle should persist is_paused = true
+    EXPECT_CALL(mock_pers, save_cycle_progress(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false, 0, false, true)).Times(1);
+    coordinator.pause_cycle();
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::PAUSED);
+
+    // Resume cycle should persist is_paused = false
+    EXPECT_CALL(mock_pers, save_cycle_progress(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false, 0, false, false)).Times(1);
+    coordinator.resume_cycle();
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::RUNNING);
+}
+
+TEST_F(WashCycleCoordinatorTest, ResumesInterruptedCycleFromWashStep)
+{
+    persistence::CycleSnapshot snapshot{};
+    snapshot.seq_num = 5;
+    snapshot.program = domain::WashProgram::NORMAL_WASH;
+    snapshot.level = domain::WaterLevel::MEDIUM_LEVEL;
+    snapshot.softener_enabled = true;
+    snapshot.step_index = 1; // AGITATE_NORMAL
+    snapshot.in_rinse_subcycle = false;
+    snapshot.is_running = true;
+    snapshot.is_paused = false;
+
+    coordinator.resume_interrupted_cycle(snapshot);
+
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::RUNNING);
+    EXPECT_EQ(coordinator.get_original_program(), domain::WashProgram::NORMAL_WASH);
+    EXPECT_EQ(coordinator.get_level(), domain::WaterLevel::MEDIUM_LEVEL);
+    EXPECT_TRUE(coordinator.is_softener_enabled());
+    EXPECT_EQ(coordinator.get_step_index(), 1);
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::AGITATE_NORMAL);
+    EXPECT_TRUE(agitator.is_active());
+}
+
+TEST_F(WashCycleCoordinatorTest, ResumesInterruptedCycleInPausedStateWithoutStartingActuators)
+{
+    persistence::CycleSnapshot snapshot{};
+    snapshot.seq_num = 8;
+    snapshot.program = domain::WashProgram::HEAVY_WASH;
+    snapshot.level = domain::WaterLevel::HIGH_LEVEL;
+    snapshot.softener_enabled = true;
+    snapshot.step_index = 2; // SOAK
+    snapshot.in_rinse_subcycle = false;
+    snapshot.is_running = true;
+    snapshot.is_paused = true;
+
+    coordinator.resume_interrupted_cycle(snapshot);
+
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::PAUSED);
+    EXPECT_EQ(coordinator.get_original_program(), domain::WashProgram::HEAVY_WASH);
+    EXPECT_EQ(coordinator.get_level(), domain::WaterLevel::HIGH_LEVEL);
+    EXPECT_TRUE(coordinator.is_softener_enabled());
+    EXPECT_EQ(coordinator.get_step_index(), 2);
+    EXPECT_FALSE(fill_ctrl.is_active());
+    EXPECT_FALSE(agitator.is_active());
+    EXPECT_FALSE(drain_ctrl.is_active());
+    EXPECT_FALSE(spin_ctrl.is_active());
+}
+
+TEST_F(WashCycleCoordinatorTest, ResumesInterruptedCycleFromRinseSubcycle)
+{
+    persistence::CycleSnapshot snapshot{};
+    snapshot.seq_num = 12;
+    snapshot.program = domain::WashProgram::HEAVY_WASH;
+    snapshot.level = domain::WaterLevel::HIGH_LEVEL;
+    snapshot.softener_enabled = true;
+    snapshot.step_index = 4; // FILL_SOFTENER in rinse
+    snapshot.in_rinse_subcycle = true;
+    snapshot.is_running = true;
+    snapshot.is_paused = false;
+
+    coordinator.resume_interrupted_cycle(snapshot);
+
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::RUNNING);
+    EXPECT_EQ(coordinator.get_original_program(), domain::WashProgram::HEAVY_WASH);
+    EXPECT_EQ(coordinator.get_level(), domain::WaterLevel::HIGH_LEVEL);
+    EXPECT_TRUE(coordinator.is_softener_enabled());
+    EXPECT_EQ(coordinator.get_step_index(), 4);
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::FILL_SOFTENER);
+    EXPECT_TRUE(fill_ctrl.is_active());
 }

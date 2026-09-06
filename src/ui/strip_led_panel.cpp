@@ -167,6 +167,7 @@ void StripLedPanel::render_frame(uint32_t now)
                 apply_color(k_idx_lvl_high, k_color_cyan, config_.idle_brightness);
                 break;
             case domain::WaterLevel::EMPTY:
+            default:
                 break;
             }
         }
@@ -212,6 +213,8 @@ void StripLedPanel::render_frame(uint32_t now)
             break;
         case domain::WashProgram::SPIN_ONLY:
             apply_color(k_idx_spin, k_color_white, config_.idle_brightness);
+            break;
+        default:
             break;
         }
     }

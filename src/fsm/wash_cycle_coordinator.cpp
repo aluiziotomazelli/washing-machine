@@ -1,4 +1,5 @@
 #include "wash_cycle_coordinator.hpp"
+#include "../persistence/interfaces/i_cycle_persistence.hpp"
 
 namespace fsm {
 
@@ -8,25 +9,39 @@ WashCycleCoordinator::WashCycleCoordinator(
     controllers::Agitator& agitator,
     controllers::DrainController& drain_ctrl,
     controllers::SpinController& spin_ctrl,
-    const CoordinatorConfig& config)
+    const CoordinatorConfig& config,
+    persistence::ICyclePersistence* persistence)
     : timer_hal_(timer_hal)
     , fill_ctrl_(fill_ctrl)
     , agitator_(agitator)
     , drain_ctrl_(drain_ctrl)
     , spin_ctrl_(spin_ctrl)
     , config_(config)
+    , persistence_(persistence)
 {
 }
 
 void WashCycleCoordinator::init()
 {
-    stop_cycle();
+    stop_active_process();
+    fill_ctrl_.reset_error();
+    drain_ctrl_.reset_error();
+    spin_ctrl_.reset_error();
+    state_ = MachineState::IDLE;
+    current_error_ = MachineError::NONE;
+    current_stage_ = WashStage::IDLE;
+    current_step_ = CycleStep::NONE;
+    step_index_ = 0;
+    in_rinse_subcycle_ = false;
+    unbalance_recoveries_ = 0;
+    saved_spin_step_ = CycleStep::NONE;
 }
 
 void WashCycleCoordinator::start_cycle(WashProgram program, WaterLevel level, bool softener_enabled)
 {
     stop_active_process();
 
+    original_program_ = program;
     program_ = program;
     level_ = level;
     softener_enabled_ = softener_enabled;
@@ -38,6 +53,34 @@ void WashCycleCoordinator::start_cycle(WashProgram program, WaterLevel level, bo
     saved_spin_step_ = CycleStep::NONE;
 
     plan_next_step();
+}
+
+void WashCycleCoordinator::resume_interrupted_cycle(const persistence::CycleSnapshot& snapshot)
+{
+    stop_active_process();
+
+    original_program_ = snapshot.program;
+    level_ = snapshot.level;
+    softener_enabled_ = snapshot.softener_enabled;
+    step_index_ = snapshot.step_index;
+    in_rinse_subcycle_ = snapshot.in_rinse_subcycle;
+
+    if (in_rinse_subcycle_) {
+        program_ = WashProgram::RINSE_ONLY;
+    } else {
+        program_ = snapshot.program;
+    }
+
+    state_ = MachineState::RUNNING;
+    current_error_ = MachineError::NONE;
+    unbalance_recoveries_ = 0;
+    saved_spin_step_ = CycleStep::NONE;
+
+    plan_next_step();
+
+    if (snapshot.is_paused) {
+        pause_cycle();
+    }
 }
 
 void WashCycleCoordinator::pause_cycle()
@@ -64,6 +107,17 @@ void WashCycleCoordinator::pause_cycle()
     }
     if (spin_ctrl_.is_active()) {
         spin_ctrl_.pause();
+    }
+
+    if (persistence_ != nullptr) {
+        persistence_->save_cycle_progress(
+            original_program_,
+            level_,
+            softener_enabled_,
+            step_index_,
+            in_rinse_subcycle_,
+            true
+        );
     }
 }
 
@@ -103,6 +157,17 @@ void WashCycleCoordinator::resume_cycle()
     if (spin_ctrl_.is_paused()) {
         spin_ctrl_.resume();
     }
+
+    if (persistence_ != nullptr) {
+        persistence_->save_cycle_progress(
+            original_program_,
+            level_,
+            softener_enabled_,
+            step_index_,
+            in_rinse_subcycle_,
+            false
+        );
+    }
 }
 
 void WashCycleCoordinator::advance_step()
@@ -130,6 +195,10 @@ void WashCycleCoordinator::stop_cycle()
     in_rinse_subcycle_ = false;
     unbalance_recoveries_ = 0;
     saved_spin_step_ = CycleStep::NONE;
+
+    if (persistence_ != nullptr) {
+        persistence_->save_cycle_finished(original_program_, level_, softener_enabled_);
+    }
 }
 
 void WashCycleCoordinator::stop_active_process()
@@ -298,6 +367,20 @@ void WashCycleCoordinator::execute_step(CycleStep step)
     current_step_ = step;
     step_start_ms_ = timer_hal_.get_time_ms();
 
+    // Persist active cycle step transition (unless it's an internal unbalance recovery step)
+    if (persistence_ != nullptr &&
+        step != CycleStep::RECOVERY_FILL &&
+        step != CycleStep::RECOVERY_AGITATE &&
+        step != CycleStep::RECOVERY_DRAIN) {
+        persistence_->save_cycle_progress(
+            original_program_,
+            level_,
+            softener_enabled_,
+            step_index_,
+            in_rinse_subcycle_
+        );
+    }
+
     switch (step) {
     case CycleStep::FILL_MAIN:
         fill_ctrl_.start(level_, false);
@@ -391,6 +474,9 @@ void WashCycleCoordinator::plan_next_step()
             state_ = MachineState::FINISHED;
             current_stage_ = WashStage::IDLE;
             current_step_ = CycleStep::FINISHED;
+            if (persistence_ != nullptr) {
+                persistence_->save_cycle_finished(original_program_, level_, softener_enabled_);
+            }
             break;
         }
         break;
@@ -420,6 +506,9 @@ void WashCycleCoordinator::plan_next_step()
                 state_ = MachineState::FINISHED;
                 current_stage_ = WashStage::IDLE;
                 current_step_ = CycleStep::FINISHED;
+                if (persistence_ != nullptr) {
+                    persistence_->save_cycle_finished(original_program_, level_, softener_enabled_);
+                }
                 break;
             }
         }
@@ -471,6 +560,9 @@ void WashCycleCoordinator::plan_next_step()
                 state_ = MachineState::FINISHED;
                 current_stage_ = WashStage::IDLE;
                 current_step_ = CycleStep::FINISHED;
+                if (persistence_ != nullptr) {
+                    persistence_->save_cycle_finished(original_program_, level_, softener_enabled_);
+                }
                 break;
             }
         }
@@ -534,6 +626,9 @@ void WashCycleCoordinator::plan_next_step()
                 break;
             }
         }
+        break;
+
+    default:
         break;
     }
 }

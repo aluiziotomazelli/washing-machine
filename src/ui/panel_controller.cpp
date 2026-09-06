@@ -2,6 +2,7 @@
 #include "interfaces/i_buzzer.hpp"
 #include "diagnostic_controller.hpp"
 #include "../hal/interfaces/i_timer_hal.hpp"
+#include "../persistence/interfaces/i_cycle_persistence.hpp"
 
 namespace ui {
 
@@ -14,7 +15,8 @@ PanelController::PanelController(
     IBuzzer& buzzer,
     fsm::WashCycleCoordinator& coordinator,
     DiagnosticController* diag_ctrl,
-    hal::ITimerHAL* timer_hal)
+    hal::ITimerHAL* timer_hal,
+    persistence::ICyclePersistence* persistence)
     : btn_start_pause_(btn_start_pause)
     , btn_program_(btn_program)
     , btn_water_level_(btn_water_level)
@@ -24,6 +26,7 @@ PanelController::PanelController(
     , coordinator_(coordinator)
     , diag_ctrl_(diag_ctrl)
     , timer_hal_(timer_hal)
+    , persistence_(persistence)
 {
 }
 
@@ -34,10 +37,19 @@ bool PanelController::is_diagnostic_active() const
 
 void PanelController::init()
 {
-    // Default initial selections
+    // Default initial selections (used if persistence is disabled or storage is empty)
     selected_program_ = domain::WashProgram::RINSE_ONLY;
     selected_level_ = domain::WaterLevel::LOW_LEVEL;
     softener_enabled_ = false;
+
+    if (persistence_ != nullptr) {
+        persistence::CycleSnapshot snapshot{};
+        if (persistence_->load_latest(snapshot)) {
+            selected_program_ = snapshot.program;
+            selected_level_ = snapshot.level;
+            softener_enabled_ = snapshot.softener_enabled;
+        }
+    }
 
     led_panel_.set_program(selected_program_);
     led_panel_.set_selected_level(selected_level_);
@@ -61,7 +73,8 @@ void PanelController::update()
             uint32_t now = timer_hal_ ? timer_hal_->get_time_ms() : 0;
             if (diag_entry_press_start_ms_ == 0) {
                 diag_entry_press_start_ms_ = now;
-            } else if (now - diag_entry_press_start_ms_ >= k_diag_trigger_hold_ms) {
+            }
+            else if (now - diag_entry_press_start_ms_ >= k_diag_trigger_hold_ms) {
                 diag_entry_press_start_ms_ = 0;
                 // Flush button click buffers before entering diagnostic
                 btn_program_.get_last_click();
@@ -69,7 +82,8 @@ void PanelController::update()
                 btn_start_pause_.get_last_click();
                 diag_ctrl_->enter();
             }
-        } else {
+        }
+        else {
             diag_entry_press_start_ms_ = 0;
         }
     }
