@@ -95,8 +95,8 @@ washing-machine/
 ## Wash Programs & Controls
 
 ### Programs
-1. **Normal Wash**: Main Fill $\rightarrow$ 18 min Agitation $\rightarrow$ Drain $\rightarrow$ Rinse $\rightarrow$ Final Spin (4 min).
-2. **Heavy Wash**: Main Fill $\rightarrow$ 8 min Gentle Agitation $\rightarrow$ 20 min Soak $\rightarrow$ 14 min Normal Agitation $\rightarrow$ Drain $\rightarrow$ Rinse $\rightarrow$ Final Spin.
+1. **Normal Wash**: Main Fill $\rightarrow$ 18 min Agitation $\rightarrow$ Drain $\rightarrow$ Intermediate Spin (2 min) $\rightarrow$ Rinse $\rightarrow$ Final Spin (4 min).
+2. **Heavy Wash**: Main Fill $\rightarrow$ 8 min Gentle Agitation $\rightarrow$ 20 min Soak $\rightarrow$ 14 min Normal Agitation $\rightarrow$ Drain $\rightarrow$ Intermediate Spin (2 min) $\rightarrow$ Rinse $\rightarrow$ Final Spin.
 3. **Rinse Only**:
    * *Without Softener*: Fill $\rightarrow$ 7 min Agitation $\rightarrow$ Drain $\rightarrow$ Final Spin.
    * *With Softener (Double Rinse)*: Fill $\rightarrow$ 5 min Agitation $\rightarrow$ Drain $\rightarrow$ Intermediate Spin (2 min) $\rightarrow$ Softener Fill $\rightarrow$ 2 min Gentle Agitation $\rightarrow$ 5 min Soak $\rightarrow$ 2 min Post-Agitation $\rightarrow$ Drain $\rightarrow$ Final Spin.
