@@ -183,6 +183,7 @@ TEST_F(SpinControllerTest, StopDuringSpinKeepsPumpOnUntilCoastDownCompletes)
     EXPECT_CALL(mock_drain_pump, turn_off()).Times(1);
     spin_ctrl.update();
     EXPECT_FALSE(spin_ctrl.is_active());
+    EXPECT_TRUE(spin_ctrl.is_finished());
 }
 
 TEST_F(SpinControllerTest, EmergencyStopCutsBothImmediately)

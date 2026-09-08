@@ -166,6 +166,9 @@ void SpinController::update()
             if (was_unbalanced) {
                 has_error_ = true;
             }
+            else {
+                is_finished_ = true;
+            }
         }
         break;
 

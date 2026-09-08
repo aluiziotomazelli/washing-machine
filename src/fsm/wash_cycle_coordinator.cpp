@@ -177,6 +177,15 @@ void WashCycleCoordinator::advance_step()
     }
 
     state_ = MachineState::RUNNING;
+
+    if (spin_ctrl_.is_active()) {
+        spin_ctrl_.stop();
+        if (spin_ctrl_.is_active()) {
+            return;
+        }
+    }
+
+    stop_active_process();
     step_index_++;
     plan_next_step();
 }
@@ -206,7 +215,7 @@ void WashCycleCoordinator::stop_active_process()
     fill_ctrl_.stop();
     agitator_.stop();
     drain_ctrl_.stop();
-    spin_ctrl_.stop();
+    spin_ctrl_.emergency_stop();
 
     is_soaking_ = false;
     is_settling_ = false;
@@ -223,6 +232,9 @@ void WashCycleCoordinator::trigger_error(MachineError error)
 void WashCycleCoordinator::update()
 {
     if (state_ != MachineState::RUNNING) {
+        if (state_ == MachineState::PAUSED && spin_ctrl_.is_active()) {
+            spin_ctrl_.update();
+        }
         return;
     }
 
@@ -298,7 +310,7 @@ void WashCycleCoordinator::update()
         return;
     }
 
-    if (spin_ctrl_.is_active() || spin_ctrl_.has_error()) {
+    if (spin_ctrl_.is_active() || spin_ctrl_.has_error() || spin_ctrl_.is_finished()) {
         if (spin_ctrl_.is_active()) {
             spin_ctrl_.update();
         }
@@ -353,7 +365,7 @@ void WashCycleCoordinator::exit_step(CycleStep from, CycleStep to)
 
     case CycleStep::SPIN_INTERMEDIATE:
     case CycleStep::SPIN_FINAL:
-        spin_ctrl_.stop();
+        spin_ctrl_.emergency_stop();
         break;
 
     default:

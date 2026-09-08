@@ -236,13 +236,86 @@ TEST_F(WashCycleCoordinatorTest, HandoverFromDrainToSpinAndSpinToFill)
     EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::SPIN_INTERMEDIATE);
     EXPECT_TRUE(spin_ctrl.is_active());
 
-    // Moving from SPIN_INTERMEDIATE in Normal Wash into RINSE (FILL_MAIN) MUST turn off the pump!
-    EXPECT_CALL(mock_drain_pump, turn_off()).Times(AtLeast(1));
+    // Clutch engage (100ms) finishes -> active spinning
+    simulated_time_ms += 100;
+    coordinator.update();
 
+    // Advancing during active spin enters STOP_COASTING with pump on
     coordinator.advance_step();
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::SPIN_INTERMEDIATE);
+    EXPECT_TRUE(spin_ctrl.is_active());
+
+    // 100ms into 200ms coast-down: still coasting, fill has NOT started
+    simulated_time_ms += 100;
+    coordinator.update();
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::SPIN_INTERMEDIATE);
+    EXPECT_FALSE(fill_ctrl.is_active());
+
+    // Coast-down completes (200ms total): pump is turned off, clutch released, advances to RINSE / FILL_MAIN
+    EXPECT_CALL(mock_drain_pump, turn_off()).Times(AtLeast(1));
+    simulated_time_ms += 100;
+    coordinator.update();
 
     EXPECT_EQ(coordinator.get_current_stage(), domain::WashStage::RINSE);
     EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::FILL_MAIN);
+    EXPECT_TRUE(fill_ctrl.is_active());
+}
+
+TEST_F(WashCycleCoordinatorTest, PauseDuringSpinCoastsDownAndTurnsOffPumpWhilePaused)
+{
+    coordinator.start_cycle(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false);
+    coordinator.advance_step(); // moves to SPIN_FINAL
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::SPIN_FINAL);
+
+    // Clutch engages (100ms) -> spinning
+    simulated_time_ms += 100;
+    coordinator.update();
+    EXPECT_TRUE(spin_ctrl.is_active());
+
+    // Pause while spinning: enters PAUSE_COASTING with pump held on
+    coordinator.pause_cycle();
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::PAUSED);
+    EXPECT_EQ(spin_ctrl.get_sub_phase(), controllers::SpinSubPhase::PAUSE_COASTING);
+
+    // 100ms into coast-down while paused: pump still on
+    simulated_time_ms += 100;
+    coordinator.update();
+    EXPECT_EQ(spin_ctrl.get_sub_phase(), controllers::SpinSubPhase::PAUSE_COASTING);
+
+    // Coast-down finishes (200ms total): pump is turned off while paused!
+    EXPECT_CALL(mock_drain_pump, turn_off()).Times(1);
+    simulated_time_ms += 100;
+    coordinator.update();
+    EXPECT_EQ(spin_ctrl.get_sub_phase(), controllers::SpinSubPhase::PAUSED);
+    EXPECT_TRUE(spin_ctrl.is_paused());
+
+    // Resume re-engages clutch and pump safely
+    EXPECT_CALL(mock_drain_pump, turn_on()).Times(1);
+    coordinator.resume_cycle();
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::RUNNING);
+    EXPECT_FALSE(spin_ctrl.is_paused());
+    EXPECT_EQ(spin_ctrl.get_sub_phase(), controllers::SpinSubPhase::CLUTCH_ENGAGE);
+}
+
+TEST_F(WashCycleCoordinatorTest, AdvanceStepWhilePausedDuringSpinSkipsImmediately)
+{
+    coordinator.start_cycle(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false);
+    coordinator.advance_step(); // moves to SPIN_FINAL
+
+    // Clutch engages (100ms) -> spinning
+    simulated_time_ms += 100;
+    coordinator.update();
+
+    // Pause and wait for full standstill
+    coordinator.pause_cycle();
+    simulated_time_ms += 200;
+    coordinator.update();
+    EXPECT_EQ(spin_ctrl.get_sub_phase(), controllers::SpinSubPhase::PAUSED);
+
+    // Advancing while already at 0 RPM stationary in pause skips immediately without waiting
+    coordinator.advance_step();
+    EXPECT_EQ(coordinator.get_state(), domain::MachineState::FINISHED);
+    EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::FINISHED);
 }
 
 TEST_F(WashCycleCoordinatorTest, ResumesCycleAfterFillTimeoutError)
