@@ -40,10 +40,10 @@ struct SprintStep
 
 // Default progressive sprint profile tuned for top-load suspension dynamics
 constexpr SprintStep k_default_sprints[] = {
-    {4000, 3500}, // S1: Initial pull & clothing distribution without dying
-    {5000, 3500}, // S2: Water expulsion with short pause to prevent coasting resonance
-    {6000, 4000}, // S3: Speed ramp & suspension stabilization
-    {7000, 3000}  // S4: Cutoff before resonance peak & high-speed handover to cruise
+    {3000, 2000}, // S1: Initial pull & clothing distribution without dying
+    {3500, 2500}, // S2: Water expulsion with short pause to prevent coasting resonance
+    {4000, 3500}, // S3: Speed ramp & suspension stabilization
+    {4500, 4000}  // S4: Cutoff before resonance peak & high-speed handover to cruise
 };
 
 /**
