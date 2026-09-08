@@ -35,9 +35,22 @@ static hal::ArduinoEepromHAL eeprom_hal;
 // Persistence Manager:
 static persistence::CyclePersistenceManager persistence_mgr(eeprom_hal);
 
-// Accelerometer Sensor & Vibration Monitor:
+// Accelerometer Sensor & Vibration Monitor (Configured for Balance Ring tuning):
+static controllers::VibrationConfig make_balance_ring_vib_cfg()
+{
+    controllers::VibrationConfig cfg;
+    cfg.sample_period_ms = 20;
+    cfg.window_samples = 10;
+    cfg.motion_threshold = 400;
+    cfg.warning_threshold = 15000;
+    cfg.trip_threshold = 30000;
+    cfg.shock_threshold = 32000;
+    cfg.sustained_trip_duration_ms = 5000;
+    return cfg;
+}
+static controllers::VibrationConfig vib_cfg = make_balance_ring_vib_cfg();
 static hal::Mpu6050 accel_sensor(i2c_hal);
-static controllers::VibrationMonitor vib_monitor(accel_sensor, timer_hal);
+static controllers::VibrationMonitor vib_monitor(accel_sensor, timer_hal, vib_cfg);
 
 // UI Hardware Components:
 static ui::ButtonConfig btn_cfg{
@@ -113,6 +126,8 @@ static ui::PanelController panel_ctrl(
 
 void setup()
 {
+    Serial.begin(115200);
+
     // Check if recovery from hardware watchdog reset occurred
     bool recovered_from_wdt = watchdog_hal.was_reset_by_watchdog();
 
@@ -166,6 +181,23 @@ void loop()
     // Hardware sensor & driver periodic processing
     water_level_sensor.update();
     motor.update();
+
+    // Periodic vibration sampling & telemetry stream (50 Hz / 20 ms)
+    static uint32_t last_telemetry_ms = 0;
+    uint32_t now = timer_hal.get_time_ms();
+    if (now - last_telemetry_ms >= 20) {
+        last_telemetry_ms = now;
+        vib_monitor.update();
+        const hal::Vector3& sample = vib_monitor.get_last_sample();
+        Serial.print(F("X:"));
+        Serial.print(sample.x);
+        Serial.print(F(" Y:"));
+        Serial.print(sample.y);
+        Serial.print(F(" Z:"));
+        Serial.print(sample.z);
+        Serial.print(F(" Vib:"));
+        Serial.println(vib_monitor.get_vibration());
+    }
 
     // Process & UI coordination
     if (!diag_ctrl.is_active()) {

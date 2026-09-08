@@ -169,6 +169,7 @@ While the core firmware is production-ready and fully operational, the following
 ## Deep-Dive Documentation
 
 * 📖 [**Architectural Case Study (`docs/case-study.md`)**](docs/case-study.md) — The complete engineering journey: memory optimization, hardware watchdog integration, out-of-balance DSP math, and refactoring timeline.
+* 🌊 [**Balance Ring Dynamic Tuning (`docs/balance_ring_analysis.md`)**](docs/balance_ring_analysis.md) — Empirical fluid compensation analysis, dynamic conical precession math, and resonance telemetry on Brastemp BWQ24B.
 * 🛠️ [**Field Service Technical Manual (`docs/technical-manual.md`)**](docs/technical-manual.md) — Diagnostic step-by-step procedures, LED color codes, actuator test procedures, and troubleshooting charts.
 * 📝 [**Historical 2017 Medium Article (Portuguese)**](https://medium.com/@aluiziotomazelli/controlando-uma-lavadora-de-roupas-com-arduino-b4aeb57a2abd) — The original mechanical/electrical restoration project.
 
