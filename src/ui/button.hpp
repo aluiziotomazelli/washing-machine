@@ -10,8 +10,16 @@ namespace ui {
 /**
  * @class Button
  * @brief Platform-agnostic button driver with non-blocking FSM debouncing, multi-click and long-press support.
+ *
+ * The button states were made based on the library/article:
+ * https://www.sigmdel.ca/michel/program/esp8266/arduino/switch_debouncing_en.html
+ * by Michel Deslierres.
+ *
+ * Modifications: instead of multi-click (double, triple click, etc.),
+ * only double-click is used, and a very long click was added to access hidden functions.
  */
-class Button : public IButton {
+class Button : public IButton
+{
 public:
     Button(
         hal::IGpioHAL& gpio_hal,
@@ -28,7 +36,8 @@ public:
     bool is_pressed() const override;
 
 private:
-    enum class State : uint8_t {
+    enum class State : uint8_t
+    {
         WAIT_FOR_PRESS,
         DEBOUNCE_PRESS,
         WAIT_FOR_RELEASE,
