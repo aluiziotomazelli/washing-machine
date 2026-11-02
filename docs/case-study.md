@@ -225,7 +225,7 @@ graph TD
     end
 
     subgraph Process_Controllers ["Atomic Process Controllers (src/controllers/)"]
-        FC["FillController<br>(Valves + 12m Timeout + Pause)"]
+        FC["FillController<br>(Valves + 20m Timeout + Pause)"]
         AC["Agitator<br>(CW/CCW 300ms/200ms Stroke Machine)"]
         DC["DrainController<br>(Pump + 30s Bleed + 6m Timeout)"]
         SC["SpinController<br>(Clutch + Sprints + 4s/4s + Coast-Down)"]
@@ -258,24 +258,24 @@ Rather than handling solenoid timings, motor reversals, and drain timeouts insid
 
 | Controller | Single Responsibility | Key Features |
 | :--- | :--- | :--- |
-| [`FillController`](../src/controllers/fill_controller.hpp) | Tub water intake | Controls main/softener solenoids; 12-min fail-safe timeout; `pause()` freezes timeout counter. |
+| [`FillController`](../src/controllers/fill_controller.hpp) | Tub water intake | Controls main/softener solenoids; 20-min fail-safe timeout; `pause()` freezes timeout counter. |
 | [`Agitator`](../src/controllers/agitator.hpp) | Mechanical fabric wash | 300 ms ON / 200 ms OFF stroke alternation; non-blocking CW/CCW reversal; preserves progress on `pause()`. |
 | [`DrainController`](../src/controllers/drain_controller.hpp) | Water evacuation | Controls pump; detects empty tub; executes 30-sec residual water bleeding; 6-min timeout; `pause()` freezes bleeding. |
 | [`SpinController`](../src/controllers/spin_controller.hpp) | Centrifugal water extraction | 5s clutch engagement; empirically tuned progressive sprints to overcome resonance oscillations; 4s ON / 4s OFF duty cycle; non-blocking transmission protection. |
 
 ### 3. Deep-Dive: Top-Load Transmission Mechanics & Inertia Management
 Domestic top-load washing machine transmissions (e.g. Whirlpool/Brastemp/Consul) have unique mechanical constraints:
-- **Agitation Mode (Actuator OFF):** A heavy spring clamps the brake band onto the outer tub campana, keeping the tub stationary while the central shaft freely oscillates the agitator.
-- **Spin Mode (Actuator ON):** The electromechanical actuator pulls a mechanical arm, opening the brake band and meshing the ratchet clutch teeth. The entire drum spins at 700+ RPM.
+- **Agitation Mode (Actuator OFF):** The outer drum is unclutched and free (not locked rigid), moving slightly back and forth due to water inertia and counter-inertia while the central shaft oscillates the agitator.
+- **Spin Mode (Actuator ON):** The electromechanical linear actuator pulls a mechanical lever, engaging the clutch so that the agitator and drum lock together into a single spinning assembly driven at 700+ RPM.
 
-#### The "Violent Brake-Snap" Trap:
-If electrical power to the pump/actuator is cut while the drum is spinning at full speed, the brake spring instantly snaps the brake band onto the steel drum. This produces a loud mechanical crash, severely wearing the brake lining, straining the belt, and risking tooth shear on the plastic clutch came.
+#### The Decoupling Trap & Vane Breakage Risk:
+If electrical power to the actuator is cut while the drum is spinning at full speed, the return spring instantly snaps the mechanical arm back, decoupling the agitator from the drum at 700+ RPM. With heavy, soaking-wet clothes pressed against the basket walls, this sudden rotational speed mismatch between the free drum and the driven agitator risks shearing or breaking the plastic vanes right off the agitator, on top of grinding the clutch teeth and shocking the transmission.
 
 #### The Software Solution: Non-Blocking `COAST_DOWN` Protection
 In [`SpinController`](../src/controllers/spin_controller.hpp), both normal cycle completion, `pause()`, and `stop()` pass through a 10-second `COAST_DOWN` phase:
 1. Power to the motor is cut immediately.
-2. The drain pump/actuator **remains energized** for 10 seconds, allowing the drum to decelerate smoothly through natural friction.
-3. Only when the drum has settled does the controller de-energize the actuator, letting the brake engage quietly without mechanical shock.
+2. The drain pump/actuator **remains energized** for 10 seconds, allowing the drum and agitator to decelerate together smoothly through natural friction to a complete stop.
+3. Only when the drum has settled does the controller de-energize the actuator, releasing the mechanical arm safely without mechanical shock.
 
 #### Rotational Inertia Duty Cycle (4s ON / 4s OFF):
 Continuous spin does not energize the single-phase AC induction motor non-stop. After the initial sprint ramp-down, it runs a **4000 ms ON / 4000 ms OFF** duty cycle. The high rotational momentum ($J \cdot \omega$) keeps the basket spinning at extraction velocity while cutting thermal load and electrical consumption by 50%.
@@ -339,7 +339,7 @@ The [`WashCycleCoordinator`](../src/fsm/wash_cycle_coordinator.hpp) implements t
 The [`PanelController`](../src/ui/panel_controller.hpp) bridges user input with the domain:
 - **Zero Polling in Domain:** Translates single clicks, long clicks (step advance), and very long clicks (cycle cancel) into coordinator commands.
 - **Differentiated Error Diagnostics (Legacy Restored):**
-  - `FILL_TIMEOUT` (12-min inlet fail-safe): Blinks all water level LEDs.
+  - `FILL_TIMEOUT` (20-min inlet fail-safe): Blinks all water level LEDs.
   - `DRAIN_TIMEOUT` (5-min pump fail-safe): Blinks all program stage LEDs.
 - **Non-Blocking Visual & Acoustic Feedback:** Synchronizes solid vs blinking power LEDs, stage progress, and tone patterns smoothly.
 
