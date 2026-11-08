@@ -34,14 +34,36 @@ public:
     static constexpr uint8_t k_reg_pwr_mgmt_1   = 0x6B;
     static constexpr uint8_t k_reg_who_am_i     = 0x75;
 
+    /**
+     * @brief Construct an MPU-6050 driver bound to an I2C bus.
+     * @param i2c I2C HAL used for register transactions.
+     * @param dev_addr 7-bit device address (0x68 by default).
+     * @param scale Accelerometer full-scale range (default +/-4g).
+     */
     explicit Mpu6050(II2cHAL& i2c, uint8_t dev_addr = k_default_address, AccelScale scale = AccelScale::SCALE_4G);
     ~Mpu6050() override = default;
 
+    /** @copydoc IAccelerometer::init */
     bool init() override;
+    /** @copydoc IAccelerometer::read_accel */
     bool read_accel(Vector3& accel) override;
 
+    /**
+     * @brief Get the configured 7-bit I2C device address.
+     * @return Device address (0x68 by default).
+     */
     uint8_t get_device_address() const { return dev_addr_; }
+
+    /**
+     * @brief Get the configured accelerometer full-scale range.
+     * @return Active AccelScale setting.
+     */
     AccelScale get_scale() const { return scale_; }
+
+    /**
+     * @brief Report whether the device was successfully initialized.
+     * @return true after a successful WHO_AM_I check and configuration.
+     */
     bool is_initialized() const { return is_initialized_; }
 
 private:

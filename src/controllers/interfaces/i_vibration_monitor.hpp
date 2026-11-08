@@ -32,6 +32,7 @@ public:
 
     /**
      * @brief Most recent raw 3-axis accelerometer sample.
+     * @return Constant reference to the last sampled Vector3 (axis values in raw LSB).
      */
     virtual const hal::Vector3& get_last_sample() const = 0;
 

@@ -13,8 +13,11 @@ public:
     ArduinoI2cHAL() = default;
     ~ArduinoI2cHAL() override = default;
 
+    /** @copydoc II2cHAL::init */
     void init(uint32_t clock_hz = 100000) override;
+    /** @copydoc II2cHAL::write_reg */
     bool write_reg(uint8_t dev_addr, uint8_t reg_addr, uint8_t value) override;
+    /** @copydoc II2cHAL::read_bytes */
     bool read_bytes(uint8_t dev_addr, uint8_t reg_addr, uint8_t* buffer, size_t len) override;
 };
 

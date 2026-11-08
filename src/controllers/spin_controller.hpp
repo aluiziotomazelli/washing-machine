@@ -34,8 +34,8 @@ enum class SpinSubPhase : uint8_t
  */
 struct SprintStep
 {
-    uint16_t on_ms;
-    uint16_t off_ms;
+    uint16_t on_ms;  //!< Motor run time for the sprint pulse.
+    uint16_t off_ms; //!< Inertia coast time between sprint pulses.
 };
 
 // Default progressive sprint profile tuned for top-load suspension dynamics
@@ -52,13 +52,13 @@ constexpr SprintStep k_default_sprints[] = {
  */
 struct SpinConfig
 {
-    uint32_t clutch_engage_ms{5000}; // 5s clutch engagement delay
-    uint32_t duty_on_ms{4000};       // 4s motor pulse
-    uint32_t duty_off_ms{4000};      // 4s inertia coast
-    uint32_t coast_down_ms{10000};   // 10s drum coast-down before pump off
-    const SprintStep* sprints{k_default_sprints};
-    uint8_t sprint_count{sizeof(k_default_sprints) / sizeof(k_default_sprints[0])};
-    uint8_t max_unbalance_retries{1}; // Maximum dry redistribution retries before flagging error
+    uint32_t clutch_engage_ms{5000}; //!< Clutch engagement delay in milliseconds.
+    uint32_t duty_on_ms{4000};       //!< Continuous extraction motor pulse duration.
+    uint32_t duty_off_ms{4000};      //!< Inertia coast duration between extraction pulses.
+    uint32_t coast_down_ms{10000};   //!< Drum coast-down time before releasing the pump/brake.
+    const SprintStep* sprints{k_default_sprints}; //!< Progressive sprint profile to execute.
+    uint8_t sprint_count{sizeof(k_default_sprints) / sizeof(k_default_sprints[0])}; //!< Number of sprint entries.
+    uint8_t max_unbalance_retries{1}; //!< Maximum dry redistribution retries before latching an error.
 };
 
 /**
@@ -72,6 +72,14 @@ struct SpinConfig
 class SpinController
 {
 public:
+    /**
+     * @brief Construct a spin controller bound to timer, pump, motor and optional monitor.
+     * @param timer_hal Timer abstraction used for phase timing.
+     * @param drain_pump Drain pump / brake clutch output kept engaged during coast-down.
+     * @param motor Reversible motor used for centrifugal extraction.
+     * @param config Sprint profile and phase timings.
+     * @param vibration_monitor Optional unbalance monitor; nullptr disables the guard.
+     */
     SpinController(
         hal::ITimerHAL& timer_hal,
         hal::IDigitalOutput& drain_pump,
@@ -86,6 +94,9 @@ public:
      */
     void start(domain::WaterLevel level, uint32_t duration_sec = 240);
 
+    /**
+     * @brief Periodic non-blocking update (sub-phase progression and unbalance checks).
+     */
     void update();
 
     /**
@@ -113,11 +124,40 @@ public:
      */
     void reset_error();
 
+    /**
+     * @brief Check whether the spin cycle is running.
+     * @return true while active.
+     */
     bool is_active() const { return is_active_; }
+
+    /**
+     * @brief Check whether the spin cycle is suspended.
+     * @return true while paused.
+     */
     bool is_paused() const { return is_paused_; }
+
+    /**
+     * @brief Check whether the spin cycle completed.
+     * @return true when finished.
+     */
     bool is_finished() const { return is_finished_; }
+
+    /**
+     * @brief Check whether an unbalance error is latched.
+     * @return true when the cycle stopped due to unbalance.
+     */
     bool has_error() const { return has_error_; }
+
+    /**
+     * @brief Get the number of unbalance redistribution retries already used.
+     * @return Retry count.
+     */
     uint8_t get_unbalance_retries() const { return unbalance_retries_; }
+
+    /**
+     * @brief Get the current internal sub-phase.
+     * @return Active SpinSubPhase.
+     */
     SpinSubPhase get_sub_phase() const { return sub_phase_; }
 
 private:

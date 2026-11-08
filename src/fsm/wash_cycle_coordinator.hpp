@@ -48,29 +48,29 @@ enum class CycleStep : uint8_t
 struct CoordinatorConfig
 {
     // Stage Pause & Settle
-    uint32_t stage_settle_ms{4000}; // 4s quiet delay between major stages
+    uint32_t stage_settle_ms{4000}; //!< Quiet delay between major stages (4 s).
 
     // Wash Stage Agitation & Soak Durations (in seconds)
-    uint32_t normal_wash_agitate_sec{18 * 60}; // 18 min continuous agitation
-    uint32_t heavy_wash_agitate1_sec{8 * 60};  // 8 min gentle agitation
-    uint32_t heavy_wash_soak_sec{20 * 60};     // 20 min soak
-    uint32_t heavy_wash_agitate2_sec{14 * 60}; // 14 min normal agitation
+    uint32_t normal_wash_agitate_sec{18 * 60}; //!< Normal wash continuous agitation (18 min).
+    uint32_t heavy_wash_agitate1_sec{8 * 60};  //!< Heavy wash gentle agitation (8 min).
+    uint32_t heavy_wash_soak_sec{20 * 60};     //!< Heavy wash soak (20 min).
+    uint32_t heavy_wash_agitate2_sec{14 * 60}; //!< Heavy wash normal agitation (14 min).
 
     // Rinse Stage Durations (in seconds)
-    uint32_t single_rinse_agitate_sec{7 * 60};        // 7 min single rinse
-    uint32_t double_rinse_1_agitate_sec{5 * 60};      // 5 min 1st rinse
-    uint32_t double_rinse_2_agitate_sec{2 * 60};      // 2 min gentle rinse with softener
-    uint32_t double_rinse_2_soak_sec{5 * 60};         // 5 min softener soak
-    uint32_t double_rinse_2_agitate_post_sec{2 * 60}; // 2 min post-soak agitation
+    uint32_t single_rinse_agitate_sec{7 * 60};        //!< Single rinse agitation (7 min).
+    uint32_t double_rinse_1_agitate_sec{5 * 60};      //!< First rinse agitation (5 min).
+    uint32_t double_rinse_2_agitate_sec{2 * 60};      //!< Second rinse gentle agitation (2 min).
+    uint32_t double_rinse_2_soak_sec{5 * 60};         //!< Softener soak (5 min).
+    uint32_t double_rinse_2_agitate_post_sec{2 * 60}; //!< Post-soak agitation (2 min).
 
     // Spin Durations (in seconds)
-    uint32_t intermediate_spin_sec{2 * 60}; // 2 min intermediate spin (after wash & rinse)
-    uint32_t final_spin_sec{4 * 60};        // 4 min final spin
+    uint32_t intermediate_spin_sec{2 * 60}; //!< Intermediate spin after wash and rinse (2 min).
+    uint32_t final_spin_sec{4 * 60};        //!< Final spin (4 min).
 
     // Unbalance Hydraulic Recovery
-    uint8_t max_unbalance_recoveries{1}; // 1 hydraulic recovery attempt before latching error
-    uint32_t unbalance_agitate_sec{30};  // 30s brief agitation to redistribute clothes
-    domain::WaterLevel unbalance_fill_level{domain::WaterLevel::LOW_LEVEL}; // Minimum water level
+    uint8_t max_unbalance_recoveries{1}; //!< Hydraulic recovery attempts before latching an error.
+    uint32_t unbalance_agitate_sec{30};  //!< Brief agitation to redistribute the load (30 s).
+    domain::WaterLevel unbalance_fill_level{domain::WaterLevel::LOW_LEVEL}; //!< Minimum refill level for recovery.
 };
 
 /**
@@ -84,6 +84,16 @@ struct CoordinatorConfig
 class WashCycleCoordinator
 {
 public:
+    /**
+     * @brief Construct the cycle coordinator with its atomic controllers.
+     * @param timer_hal Timer abstraction used for soak/settle timers.
+     * @param fill_ctrl Fill controller used during fill steps.
+     * @param agitator Agitator used during wash/rinse steps.
+     * @param drain_ctrl Drain controller used during drain steps.
+     * @param spin_ctrl Spin controller used during spin steps.
+     * @param config Recipe durations and recovery parameters.
+     * @param persistence Optional persistence manager for power-loss recovery.
+     */
     WashCycleCoordinator(
         hal::ITimerHAL& timer_hal,
         controllers::FillController& fill_ctrl,
@@ -93,29 +103,118 @@ public:
         const CoordinatorConfig& config = CoordinatorConfig{},
         persistence::ICyclePersistence* persistence = nullptr);
 
+    /**
+     * @brief Initialize FSM state and subordinate controllers.
+     */
     void init();
+
+    /**
+     * @brief Periodic non-blocking FSM update (step progression and recovery).
+     */
     void update();
 
     // Cycle Control Interface
+
+    /**
+     * @brief Start a new wash cycle from IDLE.
+     * @param program Selected wash program.
+     * @param level Selected water level.
+     * @param softener_enabled true to enable the softener dispenser step.
+     */
     void start_cycle(WashProgram program, WaterLevel level, bool softener_enabled);
+
+    /**
+     * @brief Resume a cycle from a persisted snapshot after power loss.
+     * @param snapshot Snapshot loaded from non-volatile storage.
+     */
     void resume_interrupted_cycle(const persistence::CycleSnapshot& snapshot);
+
+    /**
+     * @brief Pause the running cycle and suspend all active controllers.
+     */
     void pause_cycle();
+
+    /**
+     * @brief Resume a paused cycle.
+     */
     void resume_cycle();
+
+    /**
+     * @brief Skip the current step and advance to the next recipe step.
+     */
     void advance_step();
+
+    /**
+     * @brief Stop the running cycle and return to IDLE.
+     */
     void stop_cycle();
 
     // Inspection Interface
+
+    /**
+     * @brief Get the current machine macro state.
+     * @return Active MachineState.
+     */
     MachineState get_state() const { return state_; }
+
+    /**
+     * @brief Get the current latched machine error.
+     * @return Active MachineError (NONE when healthy).
+     */
     MachineError get_error() const { return current_error_; }
+
+    /**
+     * @brief Get the current wash stage used for visual feedback.
+     * @return Active WashStage.
+     */
     WashStage get_current_stage() const { return current_stage_; }
+
+    /**
+     * @brief Get the current recipe step.
+     * @return Active CycleStep.
+     */
     CycleStep get_current_step() const { return current_step_; }
+
+    /**
+     * @brief Get the active wash program.
+     * @return Active WashProgram.
+     */
     WashProgram get_program() const { return program_; }
+
+    /**
+     * @brief Get the program chosen by the user before any diagnostic override.
+     * @return Original WashProgram.
+     */
     WashProgram get_original_program() const { return original_program_; }
+
+    /**
+     * @brief Get the selected water level.
+     * @return Selected WaterLevel.
+     */
     WaterLevel get_level() const { return level_; }
+
+    /**
+     * @brief Check whether the softener option is enabled.
+     * @return true when softener dispensing is enabled.
+     */
     bool is_softener_enabled() const { return softener_enabled_; }
+
+    /**
+     * @brief Get the index of the current recipe step.
+     * @return Zero-based step index.
+     */
     uint8_t get_step_index() const { return step_index_; }
+
+    /**
+     * @brief Get the number of unbalance recoveries already attempted.
+     * @return Recovery attempt count.
+     */
     uint8_t get_unbalance_recoveries() const { return unbalance_recoveries_; }
 
+    /**
+     * @brief Attach or detach the persistence manager at runtime.
+     * @param persistence Persistence implementation, or nullptr to disable persistence.
+     */
     void set_persistence(persistence::ICyclePersistence* persistence) { persistence_ = persistence; }
 
 private:

@@ -9,13 +9,13 @@ namespace hal {
  * @brief Standard hardware watchdog timer timeout periods.
  */
 enum class WatchdogTimeout : uint8_t {
-    TIMEOUT_120MS,
-    TIMEOUT_250MS,
-    TIMEOUT_500MS,
-    TIMEOUT_1S,
-    TIMEOUT_2S,
-    TIMEOUT_4S,
-    TIMEOUT_8S
+    TIMEOUT_120MS, //!< 120 ms timeout.
+    TIMEOUT_250MS, //!< 250 ms timeout.
+    TIMEOUT_500MS, //!< 500 ms timeout.
+    TIMEOUT_1S,    //!< 1 s timeout.
+    TIMEOUT_2S,    //!< 2 s timeout.
+    TIMEOUT_4S,    //!< 4 s timeout.
+    TIMEOUT_8S     //!< 8 s timeout.
 };
 
 /**

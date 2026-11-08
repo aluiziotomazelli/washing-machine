@@ -13,9 +13,13 @@ public:
     ArduinoWatchdogHAL() = default;
     ~ArduinoWatchdogHAL() override = default;
 
+    /** @copydoc IWatchdogHAL::enable */
     void enable(WatchdogTimeout timeout) override;
+    /** @copydoc IWatchdogHAL::kick */
     void kick() override;
+    /** @copydoc IWatchdogHAL::disable */
     void disable() override;
+    /** @copydoc IWatchdogHAL::was_reset_by_watchdog */
     bool was_reset_by_watchdog() const override;
 };
 

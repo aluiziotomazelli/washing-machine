@@ -28,6 +28,19 @@ class PanelController {
 public:
     static constexpr uint32_t k_diag_trigger_hold_ms{2500};
 
+    /**
+     * @brief Construct the UI panel controller with all input/output resources.
+     * @param btn_start_pause Start/Pause button input.
+     * @param btn_program Program selection button input.
+     * @param btn_water_level Water level selection button input.
+     * @param btn_softener Softener toggle button input.
+     * @param led_panel Visual feedback panel.
+     * @param buzzer Audible feedback device.
+     * @param coordinator Wash cycle coordinator controlled by the panel.
+     * @param diag_ctrl Optional diagnostic controller; nullptr disables diagnostics.
+     * @param timer_hal Optional timer used for long-press detection.
+     * @param persistence Optional persistence manager used to save user selections.
+     */
     PanelController(
         IButton& btn_start_pause,
         IButton& btn_program,
@@ -41,12 +54,38 @@ public:
         persistence::ICyclePersistence* persistence = nullptr
     );
 
+    /**
+     * @brief Initialize inputs, outputs and restore persisted user preferences.
+     */
     void init();
+
+    /**
+     * @brief Periodic non-blocking update (button polling and UI synchronization).
+     */
     void update();
 
+    /**
+     * @brief Get the currently selected wash program.
+     * @return Selected WashProgram.
+     */
     domain::WashProgram get_selected_program() const { return selected_program_; }
+
+    /**
+     * @brief Get the currently selected water level.
+     * @return Selected WaterLevel.
+     */
     domain::WaterLevel get_selected_level() const { return selected_level_; }
+
+    /**
+     * @brief Check whether the softener option is enabled.
+     * @return true when softener is enabled.
+     */
     bool is_softener_enabled() const { return softener_enabled_; }
+
+    /**
+     * @brief Check whether field-service diagnostic mode is active.
+     * @return true when the diagnostic controller holds control.
+     */
     bool is_diagnostic_active() const;
 
 private:

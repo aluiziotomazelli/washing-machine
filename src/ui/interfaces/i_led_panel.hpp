@@ -32,26 +32,32 @@ public:
 
     /**
      * @brief Update the machine macro state for visual feedback (IDLE, RUNNING, PAUSED, ERROR, FINISHED).
+     * @param state Current machine macro state.
+     * @param error Active fault associated with ERROR state (NONE when healthy).
      */
     virtual void set_machine_state(domain::MachineState state, domain::MachineError error = domain::MachineError::NONE) = 0;
 
     /**
      * @brief Control the softener mode indicator.
+     * @param enabled true to illuminate the softener indicator.
      */
     virtual void set_softener(bool enabled) = 0;
 
     /**
      * @brief Set the visual program selection during IDLE mode (e.g. blinking for heavy wash).
+     * @param program Currently selected wash program.
      */
     virtual void set_program(WashProgram program) = 0;
 
     /**
      * @brief Update the wash stage indicator during execution (Wash, Rinse, Spin, or Idle).
+     * @param stage Current wash stage.
      */
     virtual void set_stage(WashStage stage) = 0;
 
     /**
      * @brief Update the selected water level indicator.
+     * @param level Currently selected water level.
      */
     virtual void set_selected_level(WaterLevel level) = 0;
 

@@ -40,6 +40,7 @@ public:
 
     /**
      * @brief Get the hardware pin number assigned to this output.
+     * @return GPIO pin number.
      */
     virtual uint8_t get_pin() const = 0;
 };

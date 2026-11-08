@@ -26,6 +26,20 @@ class DiagnosticController
 public:
     static constexpr uint32_t k_spin_clutch_delay_ms{5000};
 
+    /**
+     * @brief Construct the diagnostic controller with all hardware resources.
+     * @param btn_start Start button used to toggle the current test.
+     * @param btn_program Program button used to advance to the next test.
+     * @param led_panel Panel used to render diagnostic feedback.
+     * @param buzzer Buzzer used for audible feedback.
+     * @param water_sensor Water level sensor under test.
+     * @param valve_main Main inlet valve under test.
+     * @param valve_softener Softener valve under test.
+     * @param drain_pump Drain pump under test.
+     * @param motor Reversible motor under test.
+     * @param timer_hal Timer abstraction used for spin delays.
+     * @param vib_monitor Optional vibration monitor used during the spin test.
+     */
     DiagnosticController(
         IButton& btn_start,
         IButton& btn_program,
@@ -39,16 +53,61 @@ public:
         hal::ITimerHAL& timer_hal,
         controllers::IVibrationMonitor* vib_monitor = nullptr);
 
+    /**
+     * @brief Enter diagnostic mode at the first test step.
+     */
     void enter();
+
+    /**
+     * @brief Exit diagnostic mode and release all actuators.
+     */
     void exit();
+
+    /**
+     * @brief Periodic non-blocking update of the active diagnostic step.
+     */
     void update();
 
+    /**
+     * @brief Check whether diagnostic mode is currently active.
+     * @return true while diagnostics run.
+     */
     bool is_active() const { return is_active_; }
+
+    /**
+     * @brief Get the diagnostic step currently being executed.
+     * @return Active DiagnosticStep.
+     */
     DiagnosticStep get_current_step() const { return current_step_; }
+
+    /**
+     * @brief Check whether an inlet valve is energized by the test.
+     * @return true when a valve test is active.
+     */
     bool is_valve_active() const { return valve_active_; }
+
+    /**
+     * @brief Check whether the drain pump is energized by the test.
+     * @return true when the pump test is active.
+     */
     bool is_pump_active() const { return pump_active_; }
+
+    /**
+     * @brief Check whether the agitation test is running.
+     * @return true while the agitator is active.
+     */
     bool is_agitate_active() const { return agitator_.is_active(); }
+
+    /**
+     * @brief Check whether the spin test is running.
+     * @return true while the spin test is active.
+     */
     bool is_spin_active() const { return spin_active_; }
+
+    /**
+     * @brief Check whether the spin test tripped on unbalance.
+     * @return true when the vibration guard stopped the test.
+     */
     bool is_spin_tripped() const { return spin_tripped_; }
 
 private:

@@ -1,4 +1,4 @@
-# 🛠️ Field Service & Diagnostic Manual: Washing Machine Custom Controller
+# Field service and diagnostic manual: washing machine custom controller
 
 > **Target Audience:** Field service technicians, embedded engineers, and assembly personnel.  
 > **Firmware Version:** `v0.6.0+`  
@@ -6,22 +6,22 @@
 
 ---
 
-## 📑 Table of Contents
+## Table of contents
 1. [Overview & Purpose](#1-overview--purpose)
 2. [Operating Modes & Entry/Exit Procedures](#2-operating-modes--entryexit-procedures)
 3. [Operator Panel Controls](#3-operator-panel-controls)
 4. [Diagnostic Steps Reference (Steps 0 to 6)](#4-diagnostic-steps-reference)
 5. [Visual Indicator Mappings (RGB Strip vs. Discrete LEDs)](#5-visual-indicator-mappings)
-6. [Hardware Safety Interlocks & Protection](#6-hardware-safety-interlocks--protection)
+6. [Hardware safety interlocks and protection](#6-hardware-safety-interlocks-and-protection)
 7. [Field Troubleshooting Guide](#7-field-troubleshooting-guide)
 
 ---
 
 ## 1. Overview & Purpose
 
-The **Field Service Self-Test Mode (`DiagnosticController`)** provides an integrated, non-intrusive diagnostic routine built into the washing machine firmware.
+The **Field Service Self-Test Mode (`DiagnosticController`)** is a diagnostic routine built into the washing machine firmware.
 
-In standard operation, troubleshooting intermittent electrical or mechanical faults (such as a seized pump, a clogged inlet valve, an unbalance sensor failure, or motor capacitor degradation) requires either complete chassis disassembly or waiting for a 45-minute wash cycle to reproduce the symptom.
+Troubleshooting an intermittent fault such as a seized pump, a clogged inlet valve, a failed unbalance sensor, or a degraded motor capacitor usually means disassembling the chassis or waiting through a 45-minute wash cycle to reproduce the symptom.
 
 The diagnostic routine allows an operator to:
 - Test each electromechanical peripheral (valves, pump, clutch, motor windings) individually.
@@ -50,7 +50,7 @@ stateDiagram-v2
         STEP_6_SPIN_TEST --> STEP_0_LEVEL_SENSOR: Click [Program]
     }
     
-    DIAGNOSTIC_MODE --> IDLE: Hold [Start/Pause] >= 2.0s (All Actuators OFF)
+    DIAGNOSTIC_MODE --> IDLE: Hold [Start/Pause] >= 0.8s (All Actuators OFF)
 ```
 
 ### 2.1 Entering Diagnostic Mode
@@ -62,8 +62,8 @@ stateDiagram-v2
 > Releasing either button before the 2.5-second threshold cancels the entry request without disturbing normal operation.
 
 ### 2.2 Exiting Diagnostic Mode
-- **Manual Exit:** Press and hold the **[Start/Pause]** (`btn_start`) pushbutton for $\ge 2.0\text{ seconds}$.
-- **Fail-Safe Behavior:** Exiting diagnostic mode immediately de-energizes all active solenoids, pumps, and motors (`turn_off_all()`), resets the vibration monitor, and returns the machine safely to the normal `IDLE` state with default program settings.
+- **Manual Exit:** Press and hold the **[Start/Pause]** (`btn_start`) pushbutton for $\ge 0.8\text{ seconds}$ (the production `long_click_ms` threshold; a very-long click at 1.6 s also exits).
+- **Fail-safe behavior:** Exiting diagnostic mode turns off all active solenoids, pumps, and motors (`turn_off_all()`), resets the vibration monitor, and returns the machine to `IDLE` with default program settings.
 
 ---
 
@@ -75,9 +75,9 @@ When Diagnostic Mode is active, the physical pushbuttons are mapped as follows:
 | :--- | :--- | :--- |
 | **[Program]** | Single Click | **Next Step:** Advances to the next diagnostic step ($0 \rightarrow 1 \rightarrow 2 \rightarrow 3 \rightarrow 4 \rightarrow 5 \rightarrow 6 \rightarrow 0$). Shuts down active load from previous step. |
 | **[Start/Pause]** | Single Click | **Toggle Actuator:** Toggles the selected actuator ON or OFF (e.g. opens/closes valve, starts/stops agitation). |
-| **[Start/Pause]** | Long Press ($\ge 2.0\text{s}$) | **Exit Diagnostics:** Shuts off all loads and exits to normal `IDLE`. |
-| **[Water Level]** | — | Unused during diagnostics. |
-| **[Softener]** | — | Unused during diagnostics. |
+| **[Start/Pause]** | Long Press ($\ge 0.8\text{s}$) | **Exit Diagnostics:** Shuts off all loads and exits to normal `IDLE`. |
+| **[Water Level]** | Not used | Unused during diagnostics. |
+| **[Softener]** | Not used | Unused during diagnostics. |
 
 ---
 
@@ -163,11 +163,11 @@ Softener     Low Level    Med Level High Lvl Gap 1       Heavy Wash   Wash     R
 
 | Step | Mode Name | Step Marker (Pixel 0 - Far Right) | Active Feature Pixels & Color | Description |
 | :---: | :--- | :---: | :--- | :--- |
-| **0** | `LEVEL_SENSOR` | **Blue** (`0,0,255`) | **Pixels 7, 6, 5:** Cyan (`0,220,255`) | Pixels 7 (Low), 6 (Med), 5 (High) illuminate according to pressure switch contacts. |
-| **1** | `VIBRATION_SENSOR` | **Magenta** (`255,0,255`) | **Pixel 8:** Green (OK) / Red (Fail)<br>**Pixels 7 $\rightarrow$ 1:** Multi-Color VU-Meter | P8 indicates I2C health.<br>P7, P6, P5 (Green $\ge 400, 1500, 3500$ LSB)<br>P4, P3 (Yellow $\ge 6000, 8500$ LSB)<br>P2, P1 (Red $\ge 11000, 14000$ LSB). |
+| **0** | `LEVEL_SENSOR` | **Blue** (`0,100,255`) | **Pixels 7, 6, 5:** Cyan (`0,220,255`) | Pixels 7 (Low), 6 (Med), 5 (High) illuminate according to pressure switch contacts. |
+| **1** | `VIBRATION_SENSOR` | **Magenta** (`255,0,200`) | **Pixel 8:** Green (OK) / Red (Fail)<br>**Pixels 7 $\rightarrow$ 1:** Multi-Color VU-Meter | P8 indicates I2C health.<br>P7, P6, P5 (Green $\ge 400, 1500, 3500$ LSB)<br>P4, P3 (Yellow $\ge 6000, 8500$ LSB)<br>P2, P1 (Red $\ge 11000, 14000$ LSB). |
 | **2** | `MAIN_VALVE` | **Cyan** (`0,220,255`) | **Pixels 7 & 6:** Cyan | Bright Cyan when main solenoids 1 & 2 are energized; Dim Cyan when OFF. |
-| **3** | `SOFTENER_VALVE` | **Cyan** (`0,220,255`) | **Pixel 8:** Pink (`255,100,140`) | Bright Pink when softener solenoid 3 is energized; Dim Pink when OFF. |
-| **4** | `DRAIN_PUMP` | **Yellow** (`255,200,0`) | **Pixel 1:** Yellow (Pump Active)<br>**Pixels 7, 6, 5:** Cyan (Real-time Level) | P1 glows Yellow when pump is powered; P7/P6/P5 show real-time water level. |
+| **3** | `SOFTENER_VALVE` | **Cyan** (`0,220,255`) | **Pixel 8:** Pink (`255,30,140`) | Bright Pink when softener solenoid 3 is energized; Dim Pink when OFF. |
+| **4** | `DRAIN_PUMP` | **Yellow** (`255,180,0`) | **Pixel 1:** Yellow (Pump Active)<br>**Pixels 7, 6, 5:** Cyan (Real-time Level) | P1 glows Yellow when pump is powered; P7/P6/P5 show real-time water level. |
 | **5** | `MOTOR_AGITATE` | **Green** (`0,255,0`) | **Pixel 4:** Green (CW Active)<br>**Pixel 3:** Green (CCW Active) | P4 glows during CW stroke; P3 glows during CCW stroke; both OFF during dead-time. |
 | **6** | `SPIN_TEST` | **Red** (`255,0,0`) | **Pixel 2:** Yellow (Pump/Clutch)<br>**Pixel 4:** Red (Motor Spinning)<br>**Pixel 8:** Red (Vibration Tripped) | P2 indicates brake release; P4 indicates active motor rotation; P8 latches Red if unbalance limits are exceeded. |
 
@@ -187,16 +187,16 @@ Softener     Low Level    Med Level High Lvl Gap 1       Heavy Wash   Wash     R
 
 ---
 
-## 6. Hardware Safety Interlocks & Protection
+## 6. Hardware safety interlocks and protection
 
-The diagnostic mode is designed with hardware protection to prevent accidental equipment damage during service:
+Diagnostic mode includes these protections:
 
-1. **Anti-Stall Transmission Interlock:**
-   Top-load washing machine transmissions require the electromechanical actuator to physically open the spring-loaded brake band before drum rotation can occur. The firmware strictly enforces a **5000 ms clutch delay** in Step 6 before applying AC power to the motor winding.
-2. **Dynamic Unbalance Guarding:**
-   In manual spin mode, if an unbalanced load is present or suspension springs are broken, the MPU-6050 monitor trips at $V_{p-p} \ge 11,000\text{ LSB}$ ($1.34g$) or $14,000\text{ LSB}$ ($1.7g$ impact). The motor is cut off in $<20\text{ ms}$, preventing tub impact against the chassis.
-3. **Emergency Stop & De-energization:**
-   Exiting diagnostic mode (long-pressing Start/Pause) executes `DigitalOutput::turn_off_all()` and `motor_.stop()`, guaranteeing no inductive load remains energized unattended.
+1. **Anti-stall transmission interlock:**
+   Top-load washing machine transmissions require the electromechanical actuator to open the spring-loaded brake band before the drum can rotate. The firmware enforces a **5000 ms clutch delay** in Step 6 before applying AC power to the motor winding.
+2. **Dynamic unbalance guarding:**
+   In manual spin mode, if the load is unbalanced or a suspension spring is broken, the MPU-6050 monitor trips at $V_{p-p} \ge 11,000\text{ LSB}$ ($1.34g$) or $14,000\text{ LSB}$ ($1.7g$ impact). The motor is cut off in $<20\text{ ms}$, which prevents the tub from hitting the chassis.
+3. **Emergency stop and de-energization:**
+   Exiting diagnostic mode (long-pressing Start/Pause) runs `DigitalOutput::turn_off_all()` and `motor_.stop()`, so no inductive load stays energized unattended.
 
 ---
 
@@ -209,7 +209,7 @@ The diagnostic mode is designed with hardware protection to prevent accidental e
 | **Water will not drain** | **Step 4** | Toggle pump. If pump hums but does not pump: check for foreign objects (coins, socks) in impeller. If silent: check pump coil continuity and board wiring. |
 | **Motor hums in agitation but does not oscillate** | **Step 5** | Toggle agitation. If motor hums in one direction only: check directional TRIAC or broken wire on that winding. If motor hums in both directions without rotating: check motor starting capacitor (~35 µF to 45 µF) or motor drive belt. |
 | **Loud crash / screeching during spin startup** | **Step 6** | The transmission clutch actuator is not disengaging the brake band properly, or the mechanical clutch teeth are worn/misaligned. Check brake band spring tension and actuator stroke. |
-| **Vibration sensor LED stays Red in Step 1** | **Step 1** | I2C communication error. Check 4-pin harness to MPU-6050 (VCC, GND, SDA on A4, SCL on A5) and verify 4.7 kΩ I2C pull-up resistors to 5V. |
+| **Vibration sensor LED stays red in Step 1** | **Step 1** | I2C communication error. Check the 4-pin harness to the MPU-6050 (VCC, GND, SDA on A4, SCL on A5) and verify the 4.7 kΩ I2C pull-up resistors to 5V. |
 | **Appliance "walks" or bangs violently during spin** | **Step 1 & Step 6** | Shake tub manually in Step 1 and observe VU-meter. If minor movement causes massive amplitude readings: inspect the 4 suspension rod springs and plastic dampers for wear or loss of damping grease. |
 
 ---

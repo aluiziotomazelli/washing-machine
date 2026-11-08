@@ -21,6 +21,13 @@ namespace ui {
 class Button : public IButton
 {
 public:
+    /**
+     * @brief Construct a button driver bound to a GPIO pin.
+     * @param gpio_hal GPIO abstraction used to sample the pin.
+     * @param timer_hal Timer abstraction used for debounce/click timing.
+     * @param pin Hardware pin connected to the button.
+     * @param config Electrical and timing configuration.
+     */
     Button(
         hal::IGpioHAL& gpio_hal,
         hal::ITimerHAL& timer_hal,
@@ -29,10 +36,15 @@ public:
 
     ~Button() override = default;
 
+    /** @copydoc IButton::init */
     void init() override;
+    /** @copydoc IButton::deinit */
     void deinit() override;
+    /** @copydoc IButton::update */
     void update() override;
+    /** @copydoc IButton::get_last_click */
     ButtonClickType get_last_click() override;
+    /** @copydoc IButton::is_pressed */
     bool is_pressed() const override;
 
 private:

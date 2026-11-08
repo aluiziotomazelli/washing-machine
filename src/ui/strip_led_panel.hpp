@@ -11,12 +11,12 @@ namespace ui {
  */
 struct StripLedConfig
 {
-    uint8_t max_brightness{80};       // Global max brightness cap (0..255) -> 80 is ~30%
-    uint8_t idle_brightness{60};      // Steady brightness during IDLE selection
-    uint8_t future_brightness{15};    // Dim brightness for upcoming stages during RUNNING
-    uint16_t breathe_period_ms{2000}; // Period of smooth breathing animation in RUNNING (2s)
-    uint16_t blink_interval_ms{500};  // Period of strobe in PAUSED and ERROR (500ms)
-    uint8_t frame_interval_ms{33};    // Frame throttle interval (33ms -> ~30 FPS)
+    uint8_t max_brightness{80};       //!< Global brightness cap (0..255; 80 is roughly 30%).
+    uint8_t idle_brightness{60};      //!< Steady brightness during IDLE selection.
+    uint8_t future_brightness{15};    //!< Dim brightness for upcoming stages during RUNNING.
+    uint16_t breathe_period_ms{2000}; //!< Breathing animation period during RUNNING.
+    uint16_t blink_interval_ms{500};  //!< Strobe period during PAUSED and ERROR.
+    uint8_t frame_interval_ms{33};    //!< Frame throttle interval (~30 FPS).
 
     constexpr StripLedConfig() = default;
 
@@ -42,15 +42,15 @@ struct StripLedConfig
  * @brief 9-Pixel Addressable RGB LED Panel Driver implementing ui::ILedPanel.
  *
  * Pixel Mapping:
- * [P0]: Softener (Pink)
- * [P1]: Gap / Separator (OFF)
- * [P2]: Low Level (Cyan)
- * [P3]: Medium Level (Cyan)
- * [P4]: High Level (Cyan)
- * [P5]: Heavy Wash / Soak Indicator (White - selection & soak)
- * [P6]: Wash Stage (White - L)
- * [P7]: Rinse Stage (White - E)
- * [P8]: Spin Stage (White - C)
+ * [P0]: Spin Stage (Warm white)
+ * [P1]: Rinse Stage (Warm white)
+ * [P2]: Wash Stage (Warm white)
+ * [P3]: Heavy Wash / Soak Indicator (Warm white)
+ * [P4]: Gap / Separator (OFF)
+ * [P5]: High Level (Cyan)
+ * [P6]: Medium Level (Cyan)
+ * [P7]: Low Level (Cyan)
+ * [P8]: Softener (Pink)
  */
 class StripLedPanel : public ILedPanel
 {
@@ -79,23 +79,41 @@ public:
     static constexpr hal::RgbColor k_color_magenta{255, 0, 200};
     static constexpr hal::RgbColor k_color_off{0, 0, 0};
 
+    /**
+     * @brief Construct a strip LED panel.
+     * @param strip Addressable RGB strip driver.
+     * @param timer_hal Timer abstraction used for animation timing.
+     * @param config Visual animation configuration.
+     */
     StripLedPanel(hal::IRgbStrip& strip, hal::ITimerHAL& timer_hal, const StripLedConfig& config = StripLedConfig{});
 
     ~StripLedPanel() override = default;
 
+    /** @copydoc ILedPanel::init */
     void init() override;
+    /** @copydoc ILedPanel::update */
     void update() override;
 
+    /** @copydoc ILedPanel::set_machine_state */
     void
     set_machine_state(domain::MachineState state, domain::MachineError error = domain::MachineError::NONE) override;
+    /** @copydoc ILedPanel::set_softener */
     void set_softener(bool enabled) override;
+    /** @copydoc ILedPanel::set_program */
     void set_program(WashProgram program) override;
+    /** @copydoc ILedPanel::set_stage */
     void set_stage(WashStage stage) override;
+    /** @copydoc ILedPanel::set_selected_level */
     void set_selected_level(WaterLevel level) override;
+    /** @copydoc ILedPanel::turn_off_all */
     void turn_off_all() override;
+    /** @copydoc ILedPanel::show_diagnostic */
     void show_diagnostic(DiagnosticStep step, uint16_t raw_value = 0, bool status_ok = true) override;
 
-    // Getter for configuration
+    /**
+     * @brief Get the immutable visual configuration in use.
+     * @return Reference to the active StripLedConfig.
+     */
     const StripLedConfig& get_config() const { return config_; }
 
 private:

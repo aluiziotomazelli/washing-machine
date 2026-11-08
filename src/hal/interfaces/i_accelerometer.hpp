@@ -9,9 +9,9 @@ namespace hal {
  * @brief 3-axis raw sensor reading vector (X, Y, Z).
  */
 struct Vector3 {
-    int16_t x{0};
-    int16_t y{0};
-    int16_t z{0};
+    int16_t x{0}; //!< Raw X-axis acceleration in LSB.
+    int16_t y{0}; //!< Raw Y-axis acceleration in LSB.
+    int16_t z{0}; //!< Raw Z-axis acceleration in LSB.
 };
 
 /**

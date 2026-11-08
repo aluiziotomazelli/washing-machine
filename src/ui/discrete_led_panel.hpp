@@ -12,14 +12,14 @@ namespace ui {
  * Default values correspond to ATmega328P pinout (A0=14, A1=15, A2=16).
  */
 struct DiscreteLedPins {
-    uint8_t power{7};        // ledOn
-    uint8_t softener{6};     // ledAmaciante
-    uint8_t wash{16};        // ledLavar (A2)
-    uint8_t rinse{15};       // ledEnxaguar (A1)
-    uint8_t spin{14};        // ledCentrifugar (A0)
-    uint8_t level_low{13};   // ledNivelB
-    uint8_t level_med{12};   // ledNivelM
-    uint8_t level_high{255}; // Optional High level LED (255 = not wired)
+    uint8_t power{7};        //!< Power indicator (ledOn).
+    uint8_t softener{6};     //!< Softener indicator (ledAmaciante).
+    uint8_t wash{16};        //!< Wash stage indicator (ledLavar, A2).
+    uint8_t rinse{15};       //!< Rinse stage indicator (ledEnxaguar, A1).
+    uint8_t spin{14};        //!< Spin stage indicator (ledCentrifugar, A0).
+    uint8_t level_low{13};   //!< Low level indicator (ledNivelB).
+    uint8_t level_med{12};   //!< Medium level indicator (ledNivelM).
+    uint8_t level_high{255}; //!< Optional high level indicator (255 = not wired).
 
     DiscreteLedPins() = default;
     DiscreteLedPins(
@@ -36,6 +36,17 @@ struct DiscreteLedPins {
  */
 class DiscreteLedPanel : public ILedPanel {
 public:
+    /**
+     * @brief Construct a discrete LED panel.
+     * @param gpio_hal GPIO abstraction used to drive the LEDs.
+     * @param timer_hal Timer abstraction used for blink timing.
+     * @param pins Pin mapping for each indicator LED.
+     * @param active_high true when an LED illuminates on a HIGH level.
+     *
+     * @note The default level_med pin is D12 (ledNivelM) on the original board,
+     *       which conflicts with config::k_pressure_switch_high_pin on the current
+     *       reference build. Use StripLedPanel for that build.
+     */
     DiscreteLedPanel(
         hal::IGpioHAL& gpio_hal,
         hal::ITimerHAL& timer_hal,
@@ -45,15 +56,24 @@ public:
 
     ~DiscreteLedPanel() override = default;
 
+    /** @copydoc ILedPanel::init */
     void init() override;
+    /** @copydoc ILedPanel::update */
     void update() override;
 
+    /** @copydoc ILedPanel::set_machine_state */
     void set_machine_state(domain::MachineState state, domain::MachineError error = domain::MachineError::NONE) override;
+    /** @copydoc ILedPanel::set_softener */
     void set_softener(bool enabled) override;
+    /** @copydoc ILedPanel::set_program */
     void set_program(WashProgram program) override;
+    /** @copydoc ILedPanel::set_stage */
     void set_stage(WashStage stage) override;
+    /** @copydoc ILedPanel::set_selected_level */
     void set_selected_level(WaterLevel level) override;
+    /** @copydoc ILedPanel::turn_off_all */
     void turn_off_all() override;
+    /** @copydoc ILedPanel::show_diagnostic */
     void show_diagnostic(DiagnosticStep step, uint16_t raw_value = 0, bool status_ok = true) override;
 
 private:

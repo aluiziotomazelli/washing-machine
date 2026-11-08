@@ -19,8 +19,8 @@ enum class ContactType : uint8_t {
  * @brief Configuration for an individual water level switch contact pin.
  */
 struct LevelSensorPin {
-    uint8_t pin{255};
-    ContactType contact{ContactType::NORMALLY_OPEN};
+    uint8_t pin{255};                                  //!< GPIO pin number (255 = contact not wired).
+    ContactType contact{ContactType::NORMALLY_OPEN};   //!< Electrical contact type of the switch.
 
     LevelSensorPin() = default;
     LevelSensorPin(uint8_t p, ContactType c) : pin(p), contact(c) {}
@@ -30,10 +30,10 @@ struct LevelSensorPin {
  * @brief Configuration parameters for a multi-contact electromechanical pressure switch.
  */
 struct PressureSwitchConfig {
-    LevelSensorPin low{10, ContactType::NORMALLY_CLOSED};  // 31-32: NC (Low level, Pin 10)
-    LevelSensorPin medium{11, ContactType::NORMALLY_OPEN}; // 11-13: NO (Medium level, Pin 11)
-    LevelSensorPin high{255, ContactType::NORMALLY_OPEN};  // 21-23: NO (High level, 255 on ATmega328P due to pin 12 being ledNivelM)
-    uint16_t debounce_ms{100};                             // Hydraulic stabilization window
+    LevelSensorPin low{10, ContactType::NORMALLY_CLOSED};  //!< Low level contact (31-32 NC, D10).
+    LevelSensorPin medium{11, ContactType::NORMALLY_OPEN}; //!< Medium level contact (11-13 NO, D11).
+    LevelSensorPin high{255, ContactType::NORMALLY_OPEN};  //!< High level contact (21-23 NO; 255 disables it by default).
+    uint16_t debounce_ms{100};                             //!< Hydraulic stabilization window.
 
     PressureSwitchConfig() = default;
     PressureSwitchConfig(LevelSensorPin l, LevelSensorPin m, LevelSensorPin h = LevelSensorPin{255, ContactType::NORMALLY_OPEN}, uint16_t db = 100)
@@ -49,6 +49,16 @@ struct PressureSwitchConfig {
  */
 class PressureSwitchSensor : public IWaterLevelSensor {
 public:
+    /**
+     * @brief Construct a pressure switch reader for three level contacts.
+     * @param gpio_hal GPIO abstraction used to sample the contact pins.
+     * @param timer_hal Timer abstraction used for hydraulic debouncing.
+     * @param config Pin/contact mapping and debounce window (defaults to the reference board map).
+     *
+     * @note On the ATmega328P reference build the high-level contact is wired to D12
+     *       through config::k_pressure_switch_high_pin. The default Pin255 value disables
+     *       the high contact when no pin is supplied.
+     */
     PressureSwitchSensor(
         IGpioHAL& gpio_hal,
         ITimerHAL& timer_hal,
@@ -57,11 +67,16 @@ public:
 
     ~PressureSwitchSensor() override = default;
 
+    /** @copydoc IWaterLevelSensor::init */
     void init() override;
+    /** @copydoc IWaterLevelSensor::update */
     void update() override;
 
+    /** @copydoc IWaterLevelSensor::is_level_reached */
     bool is_level_reached(WaterLevel target) const override;
+    /** @copydoc IWaterLevelSensor::get_current_level */
     WaterLevel get_current_level() const override;
+    /** @copydoc IWaterLevelSensor::is_empty */
     bool is_empty() const override;
 
 private:

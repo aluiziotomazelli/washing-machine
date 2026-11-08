@@ -12,13 +12,13 @@ namespace controllers {
  * @brief Calibration parameters for vibration detection based on empirical load tests.
  */
 struct VibrationConfig {
-    uint16_t sample_period_ms{20};            // 50 Hz acquisition rate
-    uint8_t window_samples{10};               // 10 samples = 200 ms peak-to-peak window
-    uint16_t motion_threshold{400};           // > 400 LSB: mechanical movement detected
-    uint16_t warning_threshold{8500};         // 8500 LSB: visible unbalance warning
-    uint16_t trip_threshold{11000};           // 11000 LSB: critical sustained unbalance limit
-    uint16_t shock_threshold{14000};          // 14000 LSB: single shock trip limit (foot-slip zone)
-    uint16_t sustained_trip_duration_ms{1000}; // 1000 ms sustained limit for trip_threshold
+    uint16_t sample_period_ms{20};            //!< Acquisition period (20 ms = 50 Hz).
+    uint8_t window_samples{10};               //!< Samples per peak-to-peak window (10 = 200 ms).
+    uint16_t motion_threshold{400};           //!< Minimum envelope to report physical movement.
+    uint16_t warning_threshold{8500};         //!< Envelope that flags perceptible unbalance.
+    uint16_t trip_threshold{11000};           //!< Sustained envelope that triggers a trip.
+    uint16_t shock_threshold{14000};          //!< Single-sample envelope that triggers an immediate trip.
+    uint16_t sustained_trip_duration_ms{1000}; //!< Time above trip_threshold before latching a trip.
 };
 
 /**
@@ -27,25 +27,49 @@ struct VibrationConfig {
  */
 class VibrationMonitor : public IVibrationMonitor {
 public:
+    /**
+     * @brief Construct a vibration monitor bound to an accelerometer and timer.
+     * @param accelerometer Accelerometer source sampled by the monitor.
+     * @param timer_hal Timer abstraction used for sampling and trip timing.
+     * @param config Calibration thresholds and sampling window.
+     */
     VibrationMonitor(
         hal::IAccelerometer& accelerometer,
         hal::ITimerHAL& timer_hal,
         const VibrationConfig& config = VibrationConfig{}
     );
 
+    /** @copydoc IVibrationMonitor::init */
     void init() override;
+    /** @copydoc IVibrationMonitor::update */
     void update() override;
 
+    /** @copydoc IVibrationMonitor::get_vibration */
     uint16_t get_vibration() const override { return current_vib_; }
+    /** @copydoc IVibrationMonitor::get_last_sample */
     const hal::Vector3& get_last_sample() const override { return last_sample_; }
+    /** @copydoc IVibrationMonitor::is_in_motion */
     bool is_in_motion() const override { return is_in_motion_; }
+    /** @copydoc IVibrationMonitor::is_warning */
     bool is_warning() const override { return is_warning_; }
+    /** @copydoc IVibrationMonitor::is_critical_unbalance */
     bool is_critical_unbalance() const override { return is_tripped_; }
+    /** @copydoc IVibrationMonitor::is_sensor_ok */
     bool is_sensor_ok() const override { return is_sensor_ok_; }
 
+    /** @copydoc IVibrationMonitor::reset */
     void reset() override;
 
+    /**
+     * @brief Enable or disable sample acquisition (disabled monitor keeps last state).
+     * @param enabled true to resume sampling.
+     */
     void set_enabled(bool enabled) { is_enabled_ = enabled; }
+
+    /**
+     * @brief Check whether sampling is currently enabled.
+     * @return true when the monitor is sampling.
+     */
     bool is_enabled() const { return is_enabled_; }
 
 private:

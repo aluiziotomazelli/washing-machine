@@ -14,6 +14,13 @@ namespace ui {
  */
 class Buzzer : public IBuzzer {
 public:
+    /**
+     * @brief Construct a buzzer driver bound to a GPIO pin.
+     * @param gpio_hal GPIO/tone abstraction used to drive the buzzer.
+     * @param timer_hal Timer abstraction used for pattern timing.
+     * @param pin Hardware pin connected to the buzzer.
+     * @param frequency_hz Tone frequency for passive piezo transducers (default 3000 Hz).
+     */
     Buzzer(
         hal::IGpioHAL& gpio_hal,
         hal::ITimerHAL& timer_hal,
@@ -23,11 +30,17 @@ public:
 
     ~Buzzer() override = default;
 
+    /** @copydoc IBuzzer::init */
     void init() override;
+    /** @copydoc IBuzzer::update */
     void update() override;
+    /** @copydoc IBuzzer::beep */
     void beep(uint16_t duration_ms = 50) override;
+    /** @copydoc IBuzzer::play_pattern */
     void play_pattern(BuzzerPattern pattern) override;
+    /** @copydoc IBuzzer::stop */
     void stop() override;
+    /** @copydoc IBuzzer::is_playing */
     bool is_playing() const override;
 
 private:

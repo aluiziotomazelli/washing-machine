@@ -31,11 +31,17 @@ public:
 
     ~DigitalOutput() override = default;
 
+    /** @copydoc IDigitalOutput::init */
     void init() override;
+    /** @copydoc IDigitalOutput::turn_on */
     void turn_on() override;
+    /** @copydoc IDigitalOutput::turn_off */
     void turn_off() override;
+    /** @copydoc IDigitalOutput::toggle */
     void toggle() override;
+    /** @copydoc IDigitalOutput::is_on */
     bool is_on() const override;
+    /** @copydoc IDigitalOutput::get_pin */
     uint8_t get_pin() const override;
 
     /**

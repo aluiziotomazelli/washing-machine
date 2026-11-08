@@ -8,9 +8,9 @@ namespace hal {
  * @brief Standard 24-bit RGB Color structure.
  */
 struct RgbColor {
-    uint8_t r{0};
-    uint8_t g{0};
-    uint8_t b{0};
+    uint8_t r{0}; //!< Red component (0..255).
+    uint8_t g{0}; //!< Green component (0..255).
+    uint8_t b{0}; //!< Blue component (0..255).
 
     constexpr RgbColor() = default;
     constexpr RgbColor(uint8_t red, uint8_t green, uint8_t blue)
@@ -54,6 +54,8 @@ public:
 
     /**
      * @brief Get current RGB color of a pixel from the buffer.
+     * @param index Pixel index (0-indexed).
+     * @return Color currently stored for the pixel.
      */
     virtual RgbColor get_pixel(uint8_t index) const = 0;
 
@@ -69,6 +71,7 @@ public:
 
     /**
      * @brief Get total number of configured pixels in strip.
+     * @return Number of addressable pixels.
      */
     virtual uint8_t get_num_pixels() const = 0;
 };

@@ -1,31 +1,29 @@
 # Clean C++ Washing Machine Controller
 
 [![CI - Host Tests & Firmware Build](https://github.com/aluiziotomazelli/washing-machine/actions/workflows/ci.yml/badge.svg)](https://github.com/aluiziotomazelli/washing-machine/actions/workflows/ci.yml)
-[![Unit Tests](https://img.shields.io/badge/tests-203%20passed-brightgreen)](https://github.com/aluiziotomazelli/washing-machine)
+[![Unit Tests](https://img.shields.io/badge/tests-205%20passed-brightgreen)](https://github.com/aluiziotomazelli/washing-machine)
 [![Heap Allocation](https://img.shields.io/badge/heap-0%20bytes-blue)](https://github.com/aluiziotomazelli/washing-machine)
 [![Target](https://img.shields.io/badge/target-ATmega328P%20%2F%2016MHz-orange)](https://github.com/aluiziotomazelli/washing-machine)
 [![Coverage Report](https://img.shields.io/badge/coverage-report-blue)](https://aluiziotomazelli.github.io/washing-machine/index.html)
 
-An industrial-grade, open-source custom controller firmware for domestic top-load washing machines. Built in modern, modular, non-blocking C++ for the ATmega328P microcontroller (Arduino Pro Mini / Nano), replacing obsolete or broken proprietary control boards.
+An open-source controller firmware for domestic top-load washing machines. It is written in modular, non-blocking C++ for the ATmega328P (Arduino Pro Mini / Nano) and replaces obsolete or broken proprietary control boards.
 
 ---
 
 ## Key Features
 
-* **Event-Driven Non-Blocking State Machine**: Zero `delay()` calls or blocking loops throughout the entire codebase. Every process runs concurrently with predictable timing.
-* **Non-Volatile State Persistence & AC Power-Loss Recovery**: 64-slot wear-leveling circular ring buffer with CRC-8 data integrity validation in EEPROM. Automatically resumes interrupted wash cycles after power outages, intelligently distinguishes running vs. user-paused states (preventing unexpected midnight restarts during overnight soaks), and preserves user program/water level preferences.
-* **Real-Time Out-of-Balance Sensing**: 50 Hz digital signal processing on the I2C bus via an MPU-6050 accelerometer with gravity offset rejection and peak-to-peak envelope windowing.
-* **Multi-Tier Dynamic Unbalance Mitigation**:
-  1. *Dry Coast-Down Retry*: Stops motor, keeps pump active for 10s until 0 RPM, and retries spin sprints.
-  2. *Hydraulic Recovery*: Injects water to Low Level, executes a 30s agitation pattern to redistribute laundry evenly, drains, and smoothly resumes spin.
-  3. *Latching Safety Trip*: Shuts down safely and alerts if unbalance persists.
-* **Field Service Diagnostic Mode**: Built-in 7-step interactive hardware self-test routine for technicians—test individual water valves, drain pump, bi-directional motor, clutch, pressure switches, and live vibration VU-meter without opening the appliance.
-* **Dual Visual Panel Support**:
-  * **`main` branch**: WS2812B 9-pixel Addressable RGB LED strip with smooth breathing animations.
-  * **`discrete-leds` branch**: Classical discrete LED panel board pinout.
-* **Zero Dynamic Memory (0 Bytes Heap)**: Deterministic execution with zero heap fragmentation risk.
-* **Dual-Target Native PC Unit Testing**: 203 unit tests written in GoogleTest/GoogleMock executing in ~45 ms on PC.
-* **Hardware Watchdog Protection**: AVR hardware WDT with early boot disarm (`.init3`), continuous runtime kicking, and reboot detection with buzzer acoustic alerts.
+* **Event-driven, non-blocking state machine**: no blocking `delay()` calls in the control flow. Every task runs concurrently with predictable timing; the only `delay()` wrapper is in the HAL and no controller calls it.
+* **Non-volatile state persistence and AC power-loss recovery**: a 64-slot wear-leveling ring buffer in EEPROM with CRC-8 validation. It resumes an interrupted wash cycle after a power outage, distinguishes a running cycle from one the user paused (so an overnight soak does not restart at 3 AM), and keeps the last program and water level.
+* **Out-of-balance sensing**: an MPU-6050 on the I2C bus samples at 50 Hz. A rolling peak-to-peak window cancels the static gravity component.
+* **Two-tier unbalance recovery**:
+  1. *Dry retry*: stop the motor, keep the pump on for 10 s until the drum reaches 0 RPM, then retry the spin sprints.
+  2. *Hydraulic recovery*: add water to Low Level, agitate for 30 s to redistribute the load, drain, then resume the spin.
+  3. *Safety trip*: shut down and alert the user if the unbalance persists.
+* **Field service diagnostic mode**: a 7-step self-test for technicians. It exercises the water valves, drain pump, reversible motor, clutch, pressure switches, and live vibration VU-meter from the panel, without opening the appliance.
+* **Two panel options**: the `main` branch drives a 9-pixel WS2812B RGB strip with breathing animations; the `discrete-leds` branch keeps the classic discrete LED board pinout.
+* **No dynamic memory**: the firmware uses 0 bytes of heap, so there is no fragmentation risk.
+* **Dual-target tests**: 205 GoogleTest/GoogleMock tests run on a PC in about 50 ms.
+* **Hardware watchdog**: the AVR WDT is disabled in `.init3` before C++ constructors run, kicked from the main loop, and reports a watchdog reset with a buzzer alert.
 
 ---
 
@@ -82,14 +80,14 @@ washing-machine/
 │   ├── persistence/                     # Non-volatile state persistence & wear leveling
 │   │   ├── interfaces/
 │   │   │   └── i_cycle_persistence.hpp  # Persistence interface contract
-│   │   └── cycle_persistence_manager.hpp# 64-slot circular ring buffer with CRC-8 & wear leveling
+│   │   └── cycle_persistence_manager.hpp # 64-slot circular ring buffer with CRC-8 & wear leveling
 │   └── ui/                              # User Interface & Diagnostics
 │       ├── button.hpp                   # Debounce, short-click, long-click, and double-click state machine
 │       ├── buzzer.hpp                   # Non-blocking acoustic melody and alert engine
 │       ├── diagnostic_controller.hpp    # 7-step interactive technician diagnostic controller
 │       ├── strip_led_panel.hpp          # WS2812B RGB visual presentation engine
 │       └── discrete_led_panel.hpp       # Discrete GPIO LED visual presentation engine
-├── test/                                # GoogleTest / GoogleMock PC unit test suite (200 tests)
+├── test/                                # GoogleTest / GoogleMock PC unit test suite (205 tests)
 └── docs/                                # In-depth documentation & engineering manuals
     ├── case-study.md                    # Complete engineering case study (from spaghetti to clean C++)
     └── technical-manual.md              # Field technician service & diagnostic manual
@@ -111,9 +109,9 @@ washing-machine/
 * **Start/Pause**:
   * *Click*: Start selected cycle / Pause running cycle / Resume paused cycle.
   * *Long Click*: Advance (skip) currently active stage to the next stage.
-  * *Very Long Click*: Stop running cycle and resume to iddle.
+  * *Very Long Click*: Stop running cycle and return to idle.
   * **Obs:** Timing of clicks is defined in `washing-machine.ino` by `static ui::ButtonConfig btn_cfg{...}`
-* **Program**: Cycle through Normal Wash -> Heavy Wash -> Rinse Only -> Spin Only.
+* **Program**: Cycle through Heavy Wash -> Normal Wash -> Rinse Only -> Spin Only.
 * **Level**: Cycle water level between Low -> Medium -> High.
 * **Softener**: Toggle single rinse vs. double rinse with softener dispenser.
 
@@ -123,7 +121,7 @@ washing-machine/
 
 ### On Linux / macOS (Recommended CLI Toolchain)
 
-The project includes a comprehensive `Makefile` wrapping `arduino-cli` and `g++`:
+The `Makefile` wraps `arduino-cli` and `g++`:
 
 ```bash
 # 1. Compile the Arduino AVR firmware:
@@ -132,7 +130,7 @@ make build
 # 2. Upload firmware to the board via USB serial:
 make flash PORT=/dev/ttyUSB0
 
-# 3. Run all 200 native Host Unit Tests on your PC (GoogleTest / GoogleMock):
+# 3. Run the 205 host unit tests on your PC (GoogleTest / GoogleMock):
 make test
 
 # 4. Generate local HTML code coverage report (test/coverage/index.html):
@@ -149,32 +147,25 @@ make compile-db
 
 ---
 
-## 🔮 Future Roadmap & Planned Features
+## Future roadmap
 
-While the core firmware is production-ready and fully operational, the following enhancements are planned for future releases:
+The current firmware works, and these features are planned:
 
-* **Linear Inductive Water Level Sensor (Frequency-Based)**:
-  * Replace electromechanical pressure switches with an electronic linear frequency pressure sensor (e.g. LG 6501EA1001R / Samsung DC96-01703A).
-  * Continuous real-time water column monitoring using a single GPIO Timer Input Capture / Interrupt (~21 kHz to ~27 kHz 5V square wave).
-  * Eliminate mechanical switch calibration headaches, contact bounce, and physical hysteresis while enabling effortless software-defined level calibration and leak detection.
-* **Energy-Saving Auto-Standby Mode**:
-  * Dim or extinguish panel LEDs after 10 minutes of inactivity in `IDLE` state.
-  * Instantly wake the UI on any button interaction.
-* **Silent / Night Mode (Mute Buzzer)**:
-  * Toggle acoustic alerts (e.g. via long press on the Softener button) for night-time wash operations.
-  * Persist mute preference in EEPROM.
+* **Linear inductive water level sensor**: replace the electromechanical pressure switches with an electronic linear frequency sensor (LG 6501EA1001R / Samsung DC96-01703A). It would monitor the water column continuously on one GPIO using timer input capture (about 21 kHz to 27 kHz at 5 V), which removes switch calibration, contact bounce, and hysteresis, and allows software-defined level calibration and leak detection.
+* **Auto-standby**: dim or turn off the panel LEDs after 10 minutes of inactivity in `IDLE`, and wake on any button press.
+* **Silent mode**: toggle the buzzer with a long press on Softener, and store the preference in EEPROM.
 
 ---
 
-## Deep-Dive Documentation
+## Deep-dive documentation
 
-* 📖 [**Architectural Case Study (`docs/case-study.md`)**](docs/case-study.md) — The complete engineering journey: memory optimization, hardware watchdog integration, out-of-balance DSP math, and refactoring timeline.
-* 🌊 [**Balance Ring Dynamic Tuning (`docs/balance_ring_analysis.md`)**](docs/balance_ring_analysis.md) — Empirical fluid compensation analysis, dynamic conical precession math, and resonance telemetry on Brastemp BWQ24B.
-* 🛠️ [**Field Service Technical Manual (`docs/technical-manual.md`)**](docs/technical-manual.md) — Diagnostic step-by-step procedures, LED color codes, actuator test procedures, and troubleshooting charts.
-* 📝 [**Historical 2017 Medium Article (Portuguese)**](https://medium.com/@aluiziotomazelli/controlando-uma-lavadora-de-roupas-com-arduino-b4aeb57a2abd) — The original mechanical/electrical restoration project.
+* [Architectural case study](docs/case-study.md): the engineering log from the 2017 rebuild to the current architecture. It covers memory use, the watchdog, the out-of-balance math, and the refactoring timeline.
+* [Balance ring tuning](docs/balance_ring_analysis.md): fluid compensation data, conical precession math, and resonance telemetry from a Brastemp BWQ24B.
+* [Field service manual](docs/technical-manual.md): diagnostic procedures, LED color codes, actuator tests, and troubleshooting charts.
+* [Historical 2017 Medium article (Portuguese)](https://medium.com/@aluiziotomazelli/controlando-uma-lavadora-de-roupas-com-arduino-b4aeb57a2abd): the original mechanical and electrical restoration.
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the [MIT License](LICENSE).

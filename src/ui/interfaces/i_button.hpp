@@ -23,14 +23,14 @@ enum class ButtonClickType : uint8_t
  */
 struct ButtonConfig
 {
-    bool active_low{true};
-    bool enable_internal_pull{true};
-    uint16_t debounce_press_ms{20};
-    uint16_t debounce_release_ms{20};
-    uint16_t double_click_ms{300};
-    uint16_t long_click_ms{1000};
-    uint16_t very_long_click_ms{3000};
-    uint16_t timeout_ms{6000};
+    bool active_low{true};                 //!< true when the pin reads LOW while pressed.
+    bool enable_internal_pull{true};       //!< Enable the MCU internal pull-up resistor.
+    uint16_t debounce_press_ms{20};        //!< Contact stabilization time after a press edge.
+    uint16_t debounce_release_ms{20};      //!< Contact stabilization time after a release edge.
+    uint16_t double_click_ms{300};         //!< Maximum gap between clicks to report DOUBLE_CLICK.
+    uint16_t long_click_ms{1000};          //!< Hold time that promotes a press to LONG_CLICK.
+    uint16_t very_long_click_ms{3000};     //!< Hold time that promotes a press to VERY_LONG_CLICK.
+    uint16_t timeout_ms{6000};             //!< Maximum press hold before reporting TIMEOUT.
 
     constexpr ButtonConfig() = default;
 
