@@ -16,11 +16,11 @@ struct VibrationConfig
     uint16_t sample_period_ms{20};             //!< Acquisition period (20 ms = 50 Hz).
     uint8_t window_samples{10};                //!< Samples per peak-to-peak window (10 = 200 ms).
     uint16_t motion_threshold{400};            //!< Minimum envelope to report physical movement.
-    uint16_t warning_threshold{6500};          //!< Envelope that flags perceptible unbalance.
+    uint16_t warning_threshold{8000};          //!< Envelope that flags perceptible unbalance.
     uint16_t trip_threshold{11000};            //!< Sustained envelope that triggers a trip.
     uint16_t shock_threshold{14000};           //!< Single-sample envelope that triggers an immediate trip.
     uint16_t sustained_trip_duration_ms{1000}; //!< Time above trip_threshold before latching a trip.
-    uint16_t warning_clear{4727};              //!< Envelope below which warning clears (proportional to warning).
+    uint16_t warning_clear{5818};              //!< Envelope below which warning clears (proportional to warning).
     uint16_t warning_debounce_ms{200};         //!< Debounce duration above threshold before warning latches.
 };
 
