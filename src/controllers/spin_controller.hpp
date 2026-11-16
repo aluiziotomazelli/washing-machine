@@ -7,6 +7,7 @@
 #include "../hal/interfaces/i_timer_hal.hpp"
 #include "accel_timeline.hpp"
 #include "interfaces/i_vibration_monitor.hpp"
+#include "vibration_damping_policy.hpp"
 
 namespace controllers {
 
@@ -35,25 +36,26 @@ enum class SpinSubPhase : uint8_t
  */
 struct SpinConfig
 {
-    uint32_t clutch_engage_ms{5000};   //!< Clutch engagement delay in milliseconds.
-    uint32_t duty_on_ms{4000};         //!< Continuous extraction motor pulse duration.
-    uint32_t duty_off_ms{4000};        //!< Inertia coast duration between extraction pulses.
-    uint32_t coast_down_ms{18000};     //!< Drum coast-down time before releasing the pump/brake.
-    uint32_t accel_motor_on_ms{15000}; //!< Accumulated motor-on time target for ACCEL (calibrated).
-    uint32_t accel_max_wall_ms{40000}; //!< Maximum wall-clock cap for ACCEL phase.
-    uint32_t damping_min_off_ms{800};  //!< Minimum motor-off time before damping can resume.
-    uint32_t damping_max_off_ms{8000}; //!< Maximum damping duration before escalation.
-    uint8_t max_unbalance_retries{2};  //!< Dry redistribution retries before latching an error.
+    uint32_t clutch_engage_ms{5000};          //!< Clutch engagement delay in milliseconds.
+    uint32_t duty_on_ms{4000};                //!< Continuous extraction motor pulse duration.
+    uint32_t duty_off_ms{4000};               //!< Inertia coast duration between extraction pulses.
+    uint32_t coast_down_ms{18000};            //!< Drum coast-down time before releasing the pump/brake.
+    uint32_t accel_motor_on_ms{15000};        //!< Accumulated motor-on time target for ACCEL (calibrated).
+    uint32_t accel_max_wall_ms{40000};        //!< Maximum wall-clock cap for ACCEL phase.
+    uint32_t damping_min_off_ms{800};         //!< Minimum motor-off time before damping can resume.
+    uint32_t damping_max_off_ms{8000};        //!< Maximum damping duration before escalation.
+    uint32_t damping_sensor_timeout_ms{1000}; //!< Sensor-failure duration before escalation.
+    uint8_t max_unbalance_retries{2};         //!< Dry redistribution retries before latching an error.
 };
 
 /**
- * @class SpinController
- * @brief Manages centrifugal extraction sequence: clutch engage -> ACCEL -> 4s/4s inertia duty cycle -> coast down.
- *
- * Features mechanical transmission protection: routes pause() and stop() through non-blocking coast-down,
- * keeping the pump/actuator engaged until the drum slows down to avoid violent mechanical braking.
- * ACCEL is sensor-driven with adaptive vibration damping (full behavior implemented in step 6+).
- */
+     * @class SpinController
+     * @brief Manages centrifugal extraction sequence: clutch engage -> ACCEL -> 4s/4s inertia duty cycle -> coast down.
+     *
+     * Features mechanical transmission protection: routes pause() and stop() through non-blocking coast-down,
+     * keeping the pump/actuator engaged until the drum slows down to avoid violent mechanical braking.
+     * ACCEL is sensor-driven with adaptive vibration damping.
+     */
 class SpinController
 {
 public:
@@ -147,11 +149,19 @@ public:
 
 private:
     void transition_to_duty_run();
+    void enter_vibe_damping(uint32_t now);
+    void resume_from_vibe_damping(uint32_t now);
+    void enter_retry_or_stop(uint32_t now);
+    void handle_vibe_damping(uint32_t now);
+    DampingInput make_damping_input(uint32_t now) const;
+    void update_sensor_bad_tracking(uint32_t now);
+    uint32_t sensor_bad_duration_ms(uint32_t now) const;
 
     hal::ITimerHAL& timer_hal_;
     hal::IDigitalOutput& drain_pump_;
     hal::IReversibleMotor& motor_;
     SpinConfig config_;
+    VibrationDampingPolicy damping_policy_;
 
     domain::WaterLevel level_{domain::WaterLevel::LOW_LEVEL};
     uint32_t duty_run_duration_ms_{0};
@@ -162,6 +172,7 @@ private:
     uint32_t phase_start_ms_{0};
     uint32_t damping_phase_elapsed_ms_{0};
     uint32_t damping_start_ms_{0};
+    uint32_t sensor_bad_since_ms_{0};
     AccelTimeline accel_timeline_;
 
     // Duty Run tracking
@@ -172,6 +183,7 @@ private:
     bool is_paused_{false};
     bool is_finished_{false};
     bool has_error_{false};
+    bool sensor_bad_{false};
     uint8_t unbalance_retries_{0};
     IVibrationMonitor* vibration_monitor_{nullptr};
 };
