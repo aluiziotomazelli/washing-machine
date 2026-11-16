@@ -40,7 +40,7 @@ struct SpinConfig
     uint32_t duty_on_ms{4000};                //!< Continuous extraction motor pulse duration.
     uint32_t duty_off_ms{4000};               //!< Inertia coast duration between extraction pulses.
     uint32_t coast_down_ms{18000};            //!< Drum coast-down time before releasing the pump/brake.
-    uint32_t accel_motor_on_ms{15000};        //!< Accumulated motor-on time target for ACCEL (calibrated).
+    uint32_t accel_motor_on_ms{10000};        //!< Accumulated motor-on time target for ACCEL (10 s).
     uint32_t accel_max_wall_ms{40000};        //!< Maximum wall-clock cap for ACCEL phase.
     uint32_t damping_min_off_ms{800};         //!< Minimum motor-off time before damping can resume.
     uint32_t damping_max_off_ms{8000};        //!< Maximum damping duration before escalation.
