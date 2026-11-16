@@ -10,7 +10,8 @@ using ::testing::NiceMock;
 using ::testing::Return;
 using ::testing::SetArgReferee;
 
-class VibrationMonitorTest : public ::testing::Test {
+class VibrationMonitorTest : public ::testing::Test
+{
 protected:
     mocks::MockAccelerometer mock_accel;
     NiceMock<mocks::MockTimerHAL> mock_timer;
@@ -31,31 +32,29 @@ protected:
     void SetUp() override
     {
         current_time_ms = 0;
-        ON_CALL(mock_timer, get_time_ms()).WillByDefault(Invoke([this]() {
-            return current_time_ms;
-        }));
+        ON_CALL(mock_timer, get_time_ms()).WillByDefault(Invoke([this]() { return current_time_ms; }));
     }
 
     // Helper: Feed a window of 10 samples spanning min/max values
-    void feed_window(int16_t x_min, int16_t x_max,
-                     int16_t y_min, int16_t y_max,
-                     int16_t z_min, int16_t z_max)
+    void feed_window(int16_t x_min, int16_t x_max, int16_t y_min, int16_t y_max, int16_t z_min, int16_t z_max)
     {
         for (int i = 0; i < 10; ++i) {
             current_time_ms += 20;
             hal::Vector3 sample;
             if (i == 0) {
                 sample = {x_min, y_min, z_min};
-            } else if (i == 1) {
+            }
+            else if (i == 1) {
                 sample = {x_max, y_max, z_max};
-            } else {
-                sample = {static_cast<int16_t>((x_min + x_max) / 2),
-                          static_cast<int16_t>((y_min + y_max) / 2),
-                          static_cast<int16_t>((z_min + z_max) / 2)};
+            }
+            else {
+                sample = {
+                    static_cast<int16_t>((x_min + x_max) / 2),
+                    static_cast<int16_t>((y_min + y_max) / 2),
+                    static_cast<int16_t>((z_min + z_max) / 2)};
             }
 
-            EXPECT_CALL(mock_accel, read_accel(_))
-                .WillOnce(DoAll(SetArgReferee<0>(sample), Return(true)));
+            EXPECT_CALL(mock_accel, read_accel(_)).WillOnce(DoAll(SetArgReferee<0>(sample), Return(true)));
 
             monitor.update();
         }
@@ -114,6 +113,7 @@ TEST_F(VibrationMonitorTest, RejectsConstantStaticGravityOffset)
 TEST_F(VibrationMonitorTest, DetectsWarningThreshold)
 {
     // dx = 3000, dy = 3000, dz = 3000 -> Vib = 9000
+    feed_window(0, 3000, 0, 3000, 0, 3000);
     feed_window(0, 3000, 0, 3000, 0, 3000);
 
     EXPECT_EQ(monitor.get_vibration(), 9000);
@@ -208,16 +208,130 @@ TEST_F(VibrationMonitorTest, TracksSensorCommunicationHealth)
     // Successful read -> is_sensor_ok becomes true
     current_time_ms = 20;
     hal::Vector3 sample{100, 200, 300};
-    EXPECT_CALL(mock_accel, read_accel(_))
-        .WillOnce(DoAll(SetArgReferee<0>(sample), Return(true)));
+    EXPECT_CALL(mock_accel, read_accel(_)).WillOnce(DoAll(SetArgReferee<0>(sample), Return(true)));
     monitor.update();
     EXPECT_TRUE(monitor.is_sensor_ok());
 
     // Sensor disconnected / failing for > 200ms -> is_sensor_ok becomes false
     current_time_ms = 300;
-    EXPECT_CALL(mock_accel, read_accel(_))
-        .WillOnce(Return(false));
+    EXPECT_CALL(mock_accel, read_accel(_)).WillOnce(Return(false));
     monitor.update();
     EXPECT_FALSE(monitor.is_sensor_ok());
     EXPECT_EQ(monitor.get_vibration(), 0);
+}
+
+TEST_F(VibrationMonitorTest, WarningRequiresDebounceContinuousAboveThreshold)
+{
+    // Window 1 (200 ms): Vib = 9000 (above warning_threshold 8500).
+    // Debounce is 200 ms, so at the end of the first window (t = 200ms),
+    // warning_since_ms is set, but elapsed debounce (200 - 200 = 0 ms) < 200 ms.
+    // It should NOT latch warning yet.
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    EXPECT_EQ(monitor.get_vibration(), 9000);
+    EXPECT_FALSE(monitor.is_warning());
+
+    // Window 2 (400 ms): Vib = 9000 continues above threshold.
+    // 400 - 200 = 200 ms >= warning_debounce_ms (200 ms) -> warning latches!
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    EXPECT_EQ(monitor.get_vibration(), 9000);
+    EXPECT_TRUE(monitor.is_warning());
+}
+
+TEST_F(VibrationMonitorTest, WarningRemainsLatchedInHysteresisZone)
+{
+    // Latch warning with 2 windows at 9000 LSB
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    ASSERT_TRUE(monitor.is_warning());
+
+    // Window 3 (600 ms): Vibration drops to 6000 LSB (between warning_clear 4000 and warning_threshold 8500)
+    // dx = 2000, dy = 2000, dz = 2000 -> Vib = 6000
+    feed_window(0, 2000, 0, 2000, 0, 2000);
+    EXPECT_EQ(monitor.get_vibration(), 6000);
+    EXPECT_TRUE(monitor.is_warning()); // Hysteresis hold!
+
+    // Window 4 (800 ms): Vibration at 4500 LSB (still above 4000)
+    // dx = 1500, dy = 1500, dz = 1500 -> Vib = 4500
+    feed_window(0, 1500, 0, 1500, 0, 1500);
+    EXPECT_EQ(monitor.get_vibration(), 4500);
+    EXPECT_TRUE(monitor.is_warning()); // Still latched!
+}
+
+TEST_F(VibrationMonitorTest, WarningClearsBelowWarningClearThreshold)
+{
+    // Latch warning with 2 windows at 9000 LSB
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    ASSERT_TRUE(monitor.is_warning());
+
+    // Window 3: Drops below warning_clear (4000 LSB) -> e.g. Vib = 3000
+    feed_window(0, 1000, 0, 1000, 0, 1000);
+    EXPECT_EQ(monitor.get_vibration(), 3000);
+    EXPECT_FALSE(monitor.is_warning()); // Cleared!
+}
+
+TEST_F(VibrationMonitorTest, TransientSpikeBelowDebounceDoesNotLatchWarning)
+{
+    // Window 1: Transient spike above warning (Vib = 9000)
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    EXPECT_FALSE(monitor.is_warning());
+
+    // Window 2: Drops immediately below warning (Vib = 2000)
+    feed_window(0, 700, 0, 700, 0, 600);
+    EXPECT_FALSE(monitor.is_warning());
+
+    // Window 3: Another isolated spike (Vib = 9000)
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    EXPECT_FALSE(monitor.is_warning()); // Must not latch because debounce was reset
+}
+
+TEST_F(VibrationMonitorTest, ResetClearsWarningAndDebounceTimer)
+{
+    // Latch warning
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    ASSERT_TRUE(monitor.is_warning());
+
+    monitor.reset();
+    EXPECT_FALSE(monitor.is_warning());
+
+    // Next single window above threshold must not latch warning immediately
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    EXPECT_FALSE(monitor.is_warning());
+}
+
+TEST_F(VibrationMonitorTest, RejectsOrClampsInvalidConfiguration)
+{
+    controllers::VibrationConfig invalid_config{
+        20,    // sample_period_ms
+        10,    // window_samples
+        400,   // motion_threshold
+        5500,  // warning_threshold
+        11000, // trip_threshold
+        14000, // shock_threshold
+        1000,  // sustained_trip_duration_ms
+        6000,  // warning_clear (INVALID: >= warning_threshold 5500!)
+        200    // warning_debounce_ms
+    };
+
+    controllers::VibrationMonitor custom_mon{mock_accel, mock_timer, invalid_config};
+    EXPECT_FALSE(custom_mon.is_config_valid());
+    // Safe clamp ensures warning_clear is strictly less than warning_threshold
+    EXPECT_LT(custom_mon.get_config().warning_clear, custom_mon.get_config().warning_threshold);
+}
+
+TEST_F(VibrationMonitorTest, SensorFailureDoesNotSilentlyClearWarning)
+{
+    // Latch warning
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    ASSERT_TRUE(monitor.is_warning());
+
+    // Sensor failure starts
+    current_time_ms += 300;
+    EXPECT_CALL(mock_accel, read_accel(_)).WillOnce(Return(false));
+    monitor.update();
+
+    EXPECT_FALSE(monitor.is_sensor_ok());
+    EXPECT_TRUE(monitor.is_warning()); // Warning must remain latched, not cleared silently!
 }

@@ -11,21 +11,25 @@ namespace controllers {
  * @struct VibrationConfig
  * @brief Calibration parameters for vibration detection based on empirical load tests.
  */
-struct VibrationConfig {
-    uint16_t sample_period_ms{20};            //!< Acquisition period (20 ms = 50 Hz).
-    uint8_t window_samples{10};               //!< Samples per peak-to-peak window (10 = 200 ms).
-    uint16_t motion_threshold{400};           //!< Minimum envelope to report physical movement.
-    uint16_t warning_threshold{8500};         //!< Envelope that flags perceptible unbalance.
-    uint16_t trip_threshold{11000};           //!< Sustained envelope that triggers a trip.
-    uint16_t shock_threshold{14000};          //!< Single-sample envelope that triggers an immediate trip.
+struct VibrationConfig
+{
+    uint16_t sample_period_ms{20};             //!< Acquisition period (20 ms = 50 Hz).
+    uint8_t window_samples{10};                //!< Samples per peak-to-peak window (10 = 200 ms).
+    uint16_t motion_threshold{400};            //!< Minimum envelope to report physical movement.
+    uint16_t warning_threshold{5500};          //!< Envelope that flags perceptible unbalance.
+    uint16_t trip_threshold{11000};            //!< Sustained envelope that triggers a trip.
+    uint16_t shock_threshold{14000};           //!< Single-sample envelope that triggers an immediate trip.
     uint16_t sustained_trip_duration_ms{1000}; //!< Time above trip_threshold before latching a trip.
+    uint16_t warning_clear{4000};              //!< Envelope below which warning clears.
+    uint16_t warning_debounce_ms{200};         //!< Debounce duration above threshold before warning latches.
 };
 
 /**
  * @class VibrationMonitor
  * @brief Autonomous vibration analysis engine computing 3D peak-to-peak envelopes.
  */
-class VibrationMonitor : public IVibrationMonitor {
+class VibrationMonitor : public IVibrationMonitor
+{
 public:
     /**
      * @brief Construct a vibration monitor bound to an accelerometer and timer.
@@ -36,8 +40,7 @@ public:
     VibrationMonitor(
         hal::IAccelerometer& accelerometer,
         hal::ITimerHAL& timer_hal,
-        const VibrationConfig& config = VibrationConfig{}
-    );
+        const VibrationConfig& config = VibrationConfig{});
 
     /** @copydoc IVibrationMonitor::init */
     void init() override;
@@ -72,6 +75,18 @@ public:
      */
     bool is_enabled() const { return is_enabled_; }
 
+    /**
+     * @brief Check whether runtime configuration passed invariant checks.
+     * @return true if valid, false if clamped to safe defaults.
+     */
+    bool is_config_valid() const { return is_config_valid_; }
+
+    /**
+     * @brief Get active configuration (after any clamping).
+     * @return Reference to VibrationConfig.
+     */
+    const VibrationConfig& get_config() const { return config_; }
+
 private:
     void process_sample(const hal::Vector3& sample, uint32_t now);
     void reset_window_extents();
@@ -80,6 +95,7 @@ private:
     hal::ITimerHAL& timer_hal_;
     VibrationConfig config_;
 
+    bool is_config_valid_{true};
     bool is_enabled_{true};
     uint32_t last_sample_ms_{0};
 
@@ -103,6 +119,7 @@ private:
 
     // Temporal trip tracking
     uint32_t trip_start_ms_{0};
+    uint32_t warning_since_ms_{0};
 };
 
 } // namespace controllers
