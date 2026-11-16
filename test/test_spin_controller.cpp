@@ -702,3 +702,60 @@ TEST_F(SpinControllerTest, BalancedLoadNeverEntersVibeDamping)
         ASSERT_NE(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::VIBE_DAMPING);
     }
 }
+
+TEST_F(SpinControllerTest, SensorFailureDuringAccelEscalatesAfterTimeout)
+{
+    mocks::MockVibrationMonitor mock_vib;
+    controllers::SpinConfig cfg = config;
+    cfg.damping_sensor_timeout_ms = 150;
+    cfg.max_unbalance_retries = 1;
+    controllers::SpinController spin_with_vib{mock_timer, mock_drain_pump, mock_motor, cfg, &mock_vib};
+
+    ON_CALL(mock_vib, is_sensor_ok()).WillByDefault(Return(true));
+    ON_CALL(mock_vib, is_critical_unbalance()).WillByDefault(Return(false));
+    ON_CALL(mock_vib, is_warning()).WillByDefault(Return(false));
+
+    spin_with_vib.start(domain::WaterLevel::LOW_LEVEL, 60);
+    simulated_time_ms += 1000;
+    spin_with_vib.update(); // -> ACCEL
+    ASSERT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::ACCEL);
+
+    ON_CALL(mock_vib, is_sensor_ok()).WillByDefault(Return(false));
+    simulated_time_ms += 100; // first bad sample
+    spin_with_vib.update();
+    EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::ACCEL);
+
+    simulated_time_ms += 160; // timeout exceeded
+    spin_with_vib.update();
+    EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::RETRY_COASTING);
+}
+
+TEST_F(SpinControllerTest, SensorFailureDuringDutyRunOnEscalatesAfterTimeout)
+{
+    mocks::MockVibrationMonitor mock_vib;
+    controllers::SpinConfig cfg = config;
+    cfg.accel_motor_on_ms = 100;
+    cfg.damping_sensor_timeout_ms = 150;
+    cfg.max_unbalance_retries = 1;
+    controllers::SpinController spin_with_vib{mock_timer, mock_drain_pump, mock_motor, cfg, &mock_vib};
+
+    ON_CALL(mock_vib, is_sensor_ok()).WillByDefault(Return(true));
+    ON_CALL(mock_vib, is_critical_unbalance()).WillByDefault(Return(false));
+    ON_CALL(mock_vib, is_warning()).WillByDefault(Return(false));
+
+    spin_with_vib.start(domain::WaterLevel::LOW_LEVEL, 60);
+    simulated_time_ms += 1000;
+    spin_with_vib.update(); // -> ACCEL
+    simulated_time_ms += 100;
+    spin_with_vib.update(); // -> DUTY_RUN_ON
+    ASSERT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::DUTY_RUN_ON);
+
+    ON_CALL(mock_vib, is_sensor_ok()).WillByDefault(Return(false));
+    simulated_time_ms += 100;
+    spin_with_vib.update();
+    EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::DUTY_RUN_ON);
+
+    simulated_time_ms += 160;
+    spin_with_vib.update();
+    EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::RETRY_COASTING);
+}

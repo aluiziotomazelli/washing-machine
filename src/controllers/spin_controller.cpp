@@ -188,6 +188,12 @@ void SpinController::update()
         }
 
         bool motor_energized = (sub_phase_ == SpinSubPhase::ACCEL || sub_phase_ == SpinSubPhase::DUTY_RUN_ON);
+        if ((sub_phase_ == SpinSubPhase::ACCEL || sub_phase_ == SpinSubPhase::DUTY_RUN_ON) &&
+            sensor_bad_duration_ms(now) >= config_.damping_sensor_timeout_ms) {
+            enter_retry_or_stop(now);
+            return;
+        }
+
         if (motor_energized && vibration_monitor_->is_warning()) {
             enter_vibe_damping(now);
             return;
