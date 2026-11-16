@@ -18,6 +18,9 @@ test/coverage/
 # Test libraries (downloaded on demand)
 test/lib/
 
+# Temp files
+temp/
+
 # Editor / IDE / Caches
 .vscode/
 .cache/
