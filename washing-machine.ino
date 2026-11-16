@@ -18,7 +18,6 @@
 #include "src/controllers/spin_controller.hpp"
 #include "src/controllers/vibration_monitor.hpp"
 #include "src/fsm/wash_cycle_coordinator.hpp"
-#include "src/ui/diagnostic_controller.hpp"
 #include "src/ui/panel_controller.hpp"
 #include "src/hal/arduino/arduino_i2c_hal.hpp"
 #include "src/hal/arduino/arduino_eeprom_hal.hpp"
@@ -84,20 +83,6 @@ static controllers::SpinController spin_ctrl(timer_hal, drain_pump, motor, contr
 static fsm::WashCycleCoordinator
     coordinator(timer_hal, fill_ctrl, agitator, drain_ctrl, spin_ctrl, fsm::CoordinatorConfig{}, &persistence_mgr);
 
-// Diagnostic Controller:
-static ui::DiagnosticController diag_ctrl(
-    btn_start,
-    btn_program,
-    led_panel,
-    buzzer,
-    water_level_sensor,
-    valve_main,
-    valve_softener,
-    drain_pump,
-    motor,
-    timer_hal,
-    &vib_monitor);
-
 // UI Panel Controller:
 static ui::PanelController panel_ctrl(
     btn_start,
@@ -107,13 +92,14 @@ static ui::PanelController panel_ctrl(
     led_panel,
     buzzer,
     coordinator,
-    &diag_ctrl,
+    nullptr,
     &timer_hal,
     &persistence_mgr);
 
 void setup()
 {
-    // Check if recovery from hardware watchdog reset occurred
+    Serial.begin(115200);
+    // Detect Watchdog reset before flag is cleared by bootloader sequences
     bool recovered_from_wdt = watchdog_hal.was_reset_by_watchdog();
 
     // Initialize Hardware Peripherals
@@ -167,10 +153,27 @@ void loop()
     water_level_sensor.update();
     motor.update();
 
-    // Process & UI coordination
-    if (!diag_ctrl.is_active()) {
-        coordinator.update();
+    // Periodic vibration sampling & telemetry stream (50 Hz / 20 ms)
+    static uint32_t last_telemetry_ms = 0;
+    uint32_t now = timer_hal.get_time_ms();
+    if (now - last_telemetry_ms >= 20) {
+        last_telemetry_ms = now;
+        vib_monitor.update();
+        Serial.print(vib_monitor.get_vibration());
+        Serial.print(',');
+        Serial.print(static_cast<uint8_t>(spin_ctrl.get_sub_phase()));
+        Serial.print(',');
+        Serial.print(vib_monitor.is_warning() ? 1 : 0);
+        Serial.print(',');
+        Serial.print(vib_monitor.is_critical_unbalance() ? 1 : 0);
+        Serial.print(',');
+        Serial.print(vib_monitor.is_sensor_ok() ? 1 : 0);
+        Serial.print(',');
+        Serial.println(spin_ctrl.get_unbalance_retries());
     }
+
+    // Process & UI coordination
+    coordinator.update();
     panel_ctrl.update();
 
     // Pet / kick hardware watchdog to prevent timeout reset
