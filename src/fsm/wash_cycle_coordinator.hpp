@@ -11,7 +11,7 @@
 namespace persistence {
 class ICyclePersistence;
 struct CycleSnapshot;
-}
+} // namespace persistence
 
 namespace fsm {
 
@@ -69,7 +69,7 @@ struct CoordinatorConfig
 
     // Unbalance Hydraulic Recovery
     uint8_t max_unbalance_recoveries{1}; //!< Hydraulic recovery attempts before latching an error.
-    uint32_t unbalance_agitate_sec{30};  //!< Brief agitation to redistribute the load (30 s).
+    uint32_t unbalance_agitate_sec{120}; //!< Brief agitation to redistribute the load (120 s).
     domain::WaterLevel unbalance_fill_level{domain::WaterLevel::LOW_LEVEL}; //!< Minimum refill level for recovery.
 };
 
