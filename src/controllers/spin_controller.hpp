@@ -5,6 +5,7 @@
 #include "../hal/interfaces/i_digital_output.hpp"
 #include "../hal/interfaces/i_reversible_motor.hpp"
 #include "../hal/interfaces/i_timer_hal.hpp"
+#include "accel_timeline.hpp"
 #include "interfaces/i_vibration_monitor.hpp"
 
 namespace controllers {
@@ -17,10 +18,10 @@ enum class SpinSubPhase : uint8_t
 {
     IDLE = 0,
     CLUTCH_ENGAGE,  // Wait for mechanical clutch/brake to engage
-    SPRINT_ON,      // Motor sprint pulse
-    SPRINT_OFF,     // Resting pause between sprints
-    DUTY_RUN_ON,    // Continuous extraction: 4s motor pulse
-    DUTY_RUN_OFF,   // Continuous extraction: 4s inertia coast
+    ACCEL,          // Sensor-driven continuous acceleration (motor-on time accumulated)
+    VIBE_DAMPING,   // Adaptive pause while vibration warning is active
+    DUTY_RUN_ON,    // Continuous extraction: motor pulse
+    DUTY_RUN_OFF,   // Continuous extraction: inertia coast
     COAST_DOWN,     // Normal completion drum spin-down before pump off
     PAUSE_COASTING, // Controlled deceleration during pause with pump on
     PAUSED,         // Drum fully stopped and pump off
@@ -29,45 +30,29 @@ enum class SpinSubPhase : uint8_t
 };
 
 /**
- * @struct SprintStep
- * @brief Represents a single sprint phase with tailored motor run and pump pause times.
- */
-struct SprintStep
-{
-    uint16_t on_ms;  //!< Motor run time for the sprint pulse.
-    uint16_t off_ms; //!< Inertia coast time between sprint pulses.
-};
-
-// Default progressive sprint profile tuned for top-load suspension dynamics
-constexpr SprintStep k_default_sprints[] = {
-    {3000, 2000}, // S1: Initial pull & clothing distribution without dying
-    {3500, 2500}, // S2: Water expulsion with short pause to prevent coasting resonance
-    {4000, 3500}, // S3: Speed ramp & suspension stabilization
-    {4500, 4000}  // S4: Cutoff before resonance peak & high-speed handover to cruise
-};
-
-/**
  * @struct SpinConfig
  * @brief Configuration timings for spin cycle phases (in milliseconds).
  */
 struct SpinConfig
 {
-    uint32_t clutch_engage_ms{5000}; //!< Clutch engagement delay in milliseconds.
-    uint32_t duty_on_ms{4000};       //!< Continuous extraction motor pulse duration.
-    uint32_t duty_off_ms{4000};      //!< Inertia coast duration between extraction pulses.
-    uint32_t coast_down_ms{10000};   //!< Drum coast-down time before releasing the pump/brake.
-    const SprintStep* sprints{k_default_sprints}; //!< Progressive sprint profile to execute.
-    uint8_t sprint_count{sizeof(k_default_sprints) / sizeof(k_default_sprints[0])}; //!< Number of sprint entries.
-    uint8_t max_unbalance_retries{1}; //!< Maximum dry redistribution retries before latching an error.
+    uint32_t clutch_engage_ms{5000};   //!< Clutch engagement delay in milliseconds.
+    uint32_t duty_on_ms{4000};         //!< Continuous extraction motor pulse duration.
+    uint32_t duty_off_ms{4000};        //!< Inertia coast duration between extraction pulses.
+    uint32_t coast_down_ms{18000};     //!< Drum coast-down time before releasing the pump/brake.
+    uint32_t accel_motor_on_ms{15000}; //!< Accumulated motor-on time target for ACCEL (calibrated).
+    uint32_t accel_max_wall_ms{40000}; //!< Maximum wall-clock cap for ACCEL phase.
+    uint32_t damping_min_off_ms{800};  //!< Minimum motor-off time before damping can resume.
+    uint32_t damping_max_off_ms{8000}; //!< Maximum damping duration before escalation.
+    uint8_t max_unbalance_retries{2};  //!< Dry redistribution retries before latching an error.
 };
 
 /**
  * @class SpinController
- * @brief Manages centrifugal extraction sequence: clutch engage -> dynamic sprints -> 4s/4s inertia duty cycle -> coast
- * down.
+ * @brief Manages centrifugal extraction sequence: clutch engage -> ACCEL -> 4s/4s inertia duty cycle -> coast down.
  *
  * Features mechanical transmission protection: routes pause() and stop() through non-blocking coast-down,
  * keeping the pump/actuator engaged until the drum slows down to avoid violent mechanical braking.
+ * ACCEL is sensor-driven with adaptive vibration damping (full behavior implemented in step 6+).
  */
 class SpinController
 {
@@ -77,7 +62,7 @@ public:
      * @param timer_hal Timer abstraction used for phase timing.
      * @param drain_pump Drain pump / brake clutch output kept engaged during coast-down.
      * @param motor Reversible motor used for centrifugal extraction.
-     * @param config Sprint profile and phase timings.
+     * @param config Acceleration, damping and phase timings.
      * @param vibration_monitor Optional unbalance monitor; nullptr disables the guard.
      */
     SpinController(
@@ -89,7 +74,7 @@ public:
 
     /**
      * @brief Start centrifugal spin cycle.
-     * @param level Water level selected (determines sprint inertia profile).
+     * @param level Water level selected.
      * @param duration_sec Total duty-run spin duration in seconds (default 4 min).
      */
     void start(domain::WaterLevel level, uint32_t duration_sec = 240);
@@ -172,14 +157,12 @@ private:
     uint32_t duty_run_duration_ms_{0};
 
     SpinSubPhase sub_phase_{SpinSubPhase::IDLE};
-    SpinSubPhase resume_target_phase_{SpinSubPhase::DUTY_RUN_ON};
+    SpinSubPhase resume_target_phase_{SpinSubPhase::ACCEL};
+    SpinSubPhase damping_return_phase_{SpinSubPhase::ACCEL};
     uint32_t phase_start_ms_{0};
-
-    // Sprint state
-    uint8_t current_sprint_idx_{0};
-    uint8_t total_sprints_{4};
-    uint16_t current_sprint_on_ms_{4000};
-    uint16_t current_sprint_off_ms_{3500};
+    uint32_t damping_phase_elapsed_ms_{0};
+    uint32_t damping_start_ms_{0};
+    AccelTimeline accel_timeline_;
 
     // Duty Run tracking
     uint32_t duty_run_start_ms_{0};

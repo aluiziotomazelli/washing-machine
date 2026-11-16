@@ -21,7 +21,8 @@ using namespace testing;
 using namespace domain;
 using namespace ui;
 
-class PanelControllerTest : public Test {
+class PanelControllerTest : public Test
+{
 protected:
     NiceMock<mocks::MockTimerHAL> mock_timer;
     NiceMock<mocks::MockDigitalOutput> mock_valve_main;
@@ -33,7 +34,7 @@ protected:
     controllers::FillController fill_ctrl{mock_timer, mock_valve_main, mock_valve_softener, mock_water_sensor, 5000};
     controllers::Agitator agitator{mock_timer, mock_motor};
     controllers::DrainController drain_ctrl{mock_timer, mock_drain_pump, mock_water_sensor, 5000};
-    controllers::SpinConfig spin_config{100, 100, 100, 200};
+    controllers::SpinConfig spin_config{100, 100, 100, 200, 100, 400, 50, 400, 2};
     controllers::SpinController spin_ctrl{mock_timer, mock_drain_pump, mock_motor, spin_config};
 
     fsm::WashCycleCoordinator coordinator{mock_timer, fill_ctrl, agitator, drain_ctrl, spin_ctrl};
@@ -55,8 +56,7 @@ protected:
         mock_valve_softener,
         mock_drain_pump,
         mock_motor,
-        mock_timer
-    };
+        mock_timer};
 
     PanelController panel_ctrl{
         btn_start,
@@ -67,10 +67,10 @@ protected:
         buzzer,
         coordinator,
         &diag_ctrl,
-        &mock_timer
-    };
+        &mock_timer};
 
-    void SetUp() override {
+    void SetUp() override
+    {
         ON_CALL(mock_timer, get_time_ms()).WillByDefault(Return(1000));
         ON_CALL(btn_start, get_last_click()).WillByDefault(Return(ButtonClickType::NONE_CLICK));
         ON_CALL(btn_program, get_last_click()).WillByDefault(Return(ButtonClickType::NONE_CLICK));
@@ -488,13 +488,19 @@ TEST_F(PanelControllerTest, RestoresUserPreferencesFromPersistenceOnInit)
     saved_pref.softener_enabled = true;
     saved_pref.is_running = false;
 
-    EXPECT_CALL(mock_pers, load_latest(_))
-        .WillOnce(DoAll(SetArgReferee<0>(saved_pref), Return(true)));
+    EXPECT_CALL(mock_pers, load_latest(_)).WillOnce(DoAll(SetArgReferee<0>(saved_pref), Return(true)));
 
     PanelController custom_panel(
-        btn_start, btn_program, btn_level, btn_softener, led_panel, buzzer, coordinator,
-        &diag_ctrl, &mock_timer, &mock_pers
-    );
+        btn_start,
+        btn_program,
+        btn_level,
+        btn_softener,
+        led_panel,
+        buzzer,
+        coordinator,
+        &diag_ctrl,
+        &mock_timer,
+        &mock_pers);
 
     EXPECT_CALL(led_panel, set_program(WashProgram::HEAVY_WASH));
     EXPECT_CALL(led_panel, set_selected_level(WaterLevel::HIGH_LEVEL));
@@ -511,9 +517,16 @@ TEST_F(PanelControllerTest, UpdatesSelectionInRamWithoutSavingPersistenceWhenBut
 {
     mocks::MockCyclePersistence mock_pers;
     PanelController custom_panel(
-        btn_start, btn_program, btn_level, btn_softener, led_panel, buzzer, coordinator,
-        &diag_ctrl, &mock_timer, &mock_pers
-    );
+        btn_start,
+        btn_program,
+        btn_level,
+        btn_softener,
+        led_panel,
+        buzzer,
+        coordinator,
+        &diag_ctrl,
+        &mock_timer,
+        &mock_pers);
 
     custom_panel.init(); // selected_program = RINSE_ONLY, level = LOW_LEVEL, softener = false
 

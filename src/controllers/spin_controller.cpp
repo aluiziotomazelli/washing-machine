@@ -13,29 +13,20 @@ SpinController::SpinController(
     , motor_(motor)
     , config_(config)
     , vibration_monitor_(vibration_monitor)
-{
-}
+{}
 
 void SpinController::start(domain::WaterLevel level, uint32_t duration_sec)
 {
     level_ = level;
     duty_run_duration_ms_ = duration_sec * 1000;
 
-    current_sprint_idx_ = 0;
-    total_sprints_ = config_.sprint_count;
-    if (config_.sprints && total_sprints_ > 0) {
-        current_sprint_on_ms_ = config_.sprints[0].on_ms;
-        current_sprint_off_ms_ = config_.sprints[0].off_ms;
-    }
-    else {
-        current_sprint_on_ms_ = 0;
-        current_sprint_off_ms_ = 0;
-    }
-
     is_active_ = true;
     is_paused_ = false;
     is_finished_ = false;
     duty_run_elapsed_before_pause_ms_ = 0;
+    damping_phase_elapsed_ms_ = 0;
+    damping_start_ms_ = 0;
+    accel_timeline_.reset();
     reset_error();
 
     // Always engage drain pump throughout entire spin
@@ -43,7 +34,8 @@ void SpinController::start(domain::WaterLevel level, uint32_t duration_sec)
     motor_.stop();
 
     sub_phase_ = SpinSubPhase::CLUTCH_ENGAGE;
-    resume_target_phase_ = SpinSubPhase::SPRINT_ON;
+    resume_target_phase_ = SpinSubPhase::ACCEL;
+    damping_return_phase_ = SpinSubPhase::ACCEL;
     phase_start_ms_ = timer_hal_.get_time_ms();
 }
 
@@ -56,14 +48,15 @@ void SpinController::update()
     uint32_t now = timer_hal_.get_time_ms();
 
     bool is_spinning =
-        (sub_phase_ == SpinSubPhase::SPRINT_ON || sub_phase_ == SpinSubPhase::SPRINT_OFF ||
+        (sub_phase_ == SpinSubPhase::ACCEL || sub_phase_ == SpinSubPhase::VIBE_DAMPING ||
          sub_phase_ == SpinSubPhase::DUTY_RUN_ON || sub_phase_ == SpinSubPhase::DUTY_RUN_OFF);
 
-    // Out-of-balance safety monitor during active spin
+    // Out-of-balance safety monitor during active spin (damping behavior refined in step 6)
     if (vibration_monitor_ != nullptr && is_spinning) {
         vibration_monitor_->update();
         if (vibration_monitor_->is_critical_unbalance()) {
             motor_.stop();
+            accel_timeline_.on_motor_off(now);
             if (unbalance_retries_ < config_.max_unbalance_retries) {
                 unbalance_retries_++;
                 sub_phase_ = SpinSubPhase::RETRY_COASTING;
@@ -84,36 +77,28 @@ void SpinController::update()
         if (elapsed_in_phase >= config_.clutch_engage_ms) {
             sub_phase_ = resume_target_phase_;
             phase_start_ms_ = now;
-            if (sub_phase_ == SpinSubPhase::DUTY_RUN_ON || sub_phase_ == SpinSubPhase::DUTY_RUN_OFF) {
+            if (sub_phase_ == SpinSubPhase::ACCEL) {
+                accel_timeline_.start(now, config_.accel_motor_on_ms, config_.accel_max_wall_ms);
+                motor_.rotate_clockwise();
+                accel_timeline_.on_motor_on(now);
+            }
+            else if (sub_phase_ == SpinSubPhase::DUTY_RUN_ON || sub_phase_ == SpinSubPhase::DUTY_RUN_OFF) {
                 duty_run_start_ms_ = now;
-            }
-            motor_.rotate_clockwise();
-        }
-        break;
-
-    case SpinSubPhase::SPRINT_ON:
-        if (elapsed_in_phase >= current_sprint_on_ms_) {
-            motor_.stop();
-            sub_phase_ = SpinSubPhase::SPRINT_OFF;
-            phase_start_ms_ = now;
-        }
-        break;
-
-    case SpinSubPhase::SPRINT_OFF:
-        if (elapsed_in_phase >= current_sprint_off_ms_) {
-            current_sprint_idx_++;
-            if (current_sprint_idx_ >= total_sprints_) {
-                // All sprints completed -> enter duty run regime
-                transition_to_duty_run();
-            }
-            else {
-                current_sprint_on_ms_ = config_.sprints[current_sprint_idx_].on_ms;
-                current_sprint_off_ms_ = config_.sprints[current_sprint_idx_].off_ms;
-                sub_phase_ = SpinSubPhase::SPRINT_ON;
-                phase_start_ms_ = now;
                 motor_.rotate_clockwise();
             }
         }
+        break;
+
+    case SpinSubPhase::ACCEL:
+        accel_timeline_.on_motor_on(now);
+        if (accel_timeline_.is_complete(now)) {
+            accel_timeline_.on_motor_off(now);
+            transition_to_duty_run();
+        }
+        break;
+
+    case SpinSubPhase::VIBE_DAMPING:
+        // Full damping/resume/escalation logic implemented in step 6
         break;
 
     case SpinSubPhase::DUTY_RUN_ON:
@@ -174,17 +159,13 @@ void SpinController::update()
 
     case SpinSubPhase::RETRY_COASTING:
         if (elapsed_in_phase >= config_.coast_down_ms) {
-            // Drum reached full standstill (0 RPM). Reset monitor and restart progressive ramp from Sprint 1
+            // Drum reached full standstill. Reset monitor and restart acceleration ramp
             if (vibration_monitor_ != nullptr) {
                 vibration_monitor_->reset();
             }
-            current_sprint_idx_ = 0;
-            if (config_.sprints && total_sprints_ > 0) {
-                current_sprint_on_ms_ = config_.sprints[0].on_ms;
-                current_sprint_off_ms_ = config_.sprints[0].off_ms;
-            }
+            accel_timeline_.reset();
             sub_phase_ = SpinSubPhase::CLUTCH_ENGAGE;
-            resume_target_phase_ = SpinSubPhase::SPRINT_ON;
+            resume_target_phase_ = SpinSubPhase::ACCEL;
             phase_start_ms_ = now;
         }
         break;
@@ -228,6 +209,9 @@ void SpinController::pause()
 
     // Cut motor immediately, but keep pump on for coast-down to protect transmission
     motor_.stop();
+    if (sub_phase_ == SpinSubPhase::ACCEL) {
+        accel_timeline_.on_motor_off(now);
+    }
     sub_phase_ = SpinSubPhase::PAUSE_COASTING;
     phase_start_ms_ = now;
 }
@@ -247,13 +231,9 @@ void SpinController::resume()
         vibration_monitor_->reset();
     }
 
-    // Always restart progressive sprints from Sprint 1 to ensure smooth acceleration
-    current_sprint_idx_ = 0;
-    if (config_.sprints && total_sprints_ > 0) {
-        current_sprint_on_ms_ = config_.sprints[0].on_ms;
-        current_sprint_off_ms_ = config_.sprints[0].off_ms;
-    }
-    resume_target_phase_ = SpinSubPhase::SPRINT_ON;
+    // Always restart acceleration ramp from ACCEL to ensure smooth/safe restart
+    accel_timeline_.reset();
+    resume_target_phase_ = SpinSubPhase::ACCEL;
 
     // Re-engage clutch before spinning motor again
     sub_phase_ = SpinSubPhase::CLUTCH_ENGAGE;
@@ -277,6 +257,9 @@ void SpinController::stop()
 
     // Soft stop with coast-down protection
     motor_.stop();
+    if (sub_phase_ == SpinSubPhase::ACCEL) {
+        accel_timeline_.on_motor_off(timer_hal_.get_time_ms());
+    }
     sub_phase_ = SpinSubPhase::STOP_COASTING;
     phase_start_ms_ = timer_hal_.get_time_ms();
 }
@@ -285,6 +268,7 @@ void SpinController::emergency_stop()
 {
     motor_.stop();
     drain_pump_.turn_off();
+    accel_timeline_.reset();
     sub_phase_ = SpinSubPhase::IDLE;
     is_active_ = false;
     is_paused_ = false;

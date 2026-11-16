@@ -9,10 +9,21 @@ protected:
     AccelTimeline timeline;
 };
 
-TEST_F(AccelTimelineTest, InitializesInResetState)
+TEST_F(AccelTimelineTest, IsInactiveAndNotCompleteBeforeStart)
 {
+    EXPECT_FALSE(timeline.is_active());
     EXPECT_EQ(timeline.motor_on_elapsed_ms(), 0u);
     EXPECT_FALSE(timeline.is_complete(0));
+    EXPECT_FALSE(timeline.is_complete(100000));
+}
+
+TEST_F(AccelTimelineTest, StartActivatesTimeline)
+{
+    timeline.start(1000, 5000, 20000);
+
+    EXPECT_TRUE(timeline.is_active());
+    EXPECT_EQ(timeline.motor_on_elapsed_ms(), 0u);
+    EXPECT_FALSE(timeline.is_complete(1000));
 }
 
 TEST_F(AccelTimelineTest, MotorOnAccumulatesOnlyWhileMotorIsOn)
@@ -96,15 +107,17 @@ TEST_F(AccelTimelineTest, WallClockCapCompletesPhaseEvenIfMotorOnTimeIsShort)
     EXPECT_EQ(timeline.motor_on_elapsed_ms(), 2000u); // Motor-on was short
 }
 
-TEST_F(AccelTimelineTest, RestartResetsAllState)
+TEST_F(AccelTimelineTest, RestartAfterCompletionResetsActiveSession)
 {
     timeline.start(1000, 5000, 10000);
     timeline.on_motor_on(1000);
     timeline.on_motor_on(6000);
+    EXPECT_TRUE(timeline.is_active());
     EXPECT_TRUE(timeline.is_complete(6000));
 
     // Restart at t = 10000
     timeline.start(10000, 8000, 15000);
+    EXPECT_TRUE(timeline.is_active());
     EXPECT_EQ(timeline.motor_on_elapsed_ms(), 0u);
     EXPECT_FALSE(timeline.is_complete(10000));
 
@@ -112,4 +125,35 @@ TEST_F(AccelTimelineTest, RestartResetsAllState)
     timeline.on_motor_on(14000);
     EXPECT_EQ(timeline.motor_on_elapsed_ms(), 4000u);
     EXPECT_FALSE(timeline.is_complete(14000));
+}
+
+TEST_F(AccelTimelineTest, ResetMakesTimelineInactiveAndClearsProgress)
+{
+    timeline.start(1000, 5000, 10000);
+    timeline.on_motor_on(1000);
+    timeline.on_motor_on(6000);
+    EXPECT_TRUE(timeline.is_complete(6000));
+
+    timeline.reset();
+
+    EXPECT_FALSE(timeline.is_active());
+    EXPECT_FALSE(timeline.is_motor_on());
+    EXPECT_EQ(timeline.motor_on_elapsed_ms(), 0u);
+    EXPECT_FALSE(timeline.is_complete(6000));
+    EXPECT_FALSE(timeline.is_complete(100000));
+}
+
+TEST_F(AccelTimelineTest, IsCompleteFalseAfterResetEvenWhenWallCapWouldHaveElapsed)
+{
+    timeline.start(0, 20000, 30000);
+    timeline.on_motor_on(0);
+    timeline.on_motor_on(2000);
+    timeline.on_motor_off(2000);
+    EXPECT_EQ(timeline.motor_on_elapsed_ms(), 2000u);
+
+    timeline.reset();
+
+    EXPECT_FALSE(timeline.is_active());
+    EXPECT_FALSE(timeline.is_complete(30000));
+    EXPECT_FALSE(timeline.is_complete(50000));
 }
