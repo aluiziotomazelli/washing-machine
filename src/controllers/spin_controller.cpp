@@ -12,8 +12,7 @@ SpinController::SpinController(
     , drain_pump_(drain_pump)
     , motor_(motor)
     , config_(config)
-    , damping_policy_(
-          DampingConfig{config_.damping_min_off_ms, config_.damping_max_off_ms, config_.damping_sensor_timeout_ms})
+    , damping_policy_()
     , vibration_monitor_(vibration_monitor)
 {
     const SpinConfig defaults{};
@@ -42,8 +41,11 @@ SpinController::SpinController(
         is_config_valid_ = false;
     }
 
-    damping_policy_ = VibrationDampingPolicy(
-        DampingConfig{config_.damping_min_off_ms, config_.damping_max_off_ms, config_.damping_sensor_timeout_ms});
+    DampingConfig damping_config;
+    damping_config.min_off_ms = config_.damping_min_off_ms;
+    damping_config.max_off_ms = config_.damping_max_off_ms;
+    damping_config.sensor_timeout_ms = config_.damping_sensor_timeout_ms;
+    damping_policy_ = VibrationDampingPolicy(damping_config);
     if (!damping_policy_.is_config_valid()) {
         is_config_valid_ = false;
         const DampingConfig& damped = damping_policy_.get_config();
