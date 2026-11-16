@@ -124,3 +124,14 @@ TEST_F(VibrationDampingPolicyTest, NormalOperationReturnsNone)
     EXPECT_EQ(policy.evaluate(input, true, false), DampingAction::NONE);
     EXPECT_EQ(policy.evaluate(input, false, false), DampingAction::NONE);
 }
+
+TEST_F(VibrationDampingPolicyTest, RejectsOrClampsInvalidConfiguration)
+{
+    DampingConfig invalid{8000, 8000, 0}; // min >= max and zero timeout
+    VibrationDampingPolicy invalid_policy{invalid};
+
+    EXPECT_FALSE(invalid_policy.is_config_valid());
+    const DampingConfig& cfg = invalid_policy.get_config();
+    EXPECT_LT(cfg.min_off_ms, cfg.max_off_ms);
+    EXPECT_GT(cfg.sensor_timeout_ms, 0u);
+}

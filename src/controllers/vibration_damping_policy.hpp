@@ -70,13 +70,20 @@ public:
     bool can_resume(const DampingInput& input, uint32_t damping_elapsed_ms) const;
 
     /**
-     * @brief Get active damping configuration.
+     * @brief Get active damping configuration (after any clamping).
      * @return Reference to DampingConfig.
      */
     const DampingConfig& get_config() const { return config_; }
 
+    /**
+     * @brief Check whether runtime configuration passed invariant checks.
+     * @return true if valid, false if clamped to safe defaults.
+     */
+    bool is_config_valid() const { return is_config_valid_; }
+
 private:
     DampingConfig config_;
+    bool is_config_valid_{true};
 };
 
 } // namespace controllers

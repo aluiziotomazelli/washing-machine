@@ -759,3 +759,33 @@ TEST_F(SpinControllerTest, SensorFailureDuringDutyRunOnEscalatesAfterTimeout)
     spin_with_vib.update();
     EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::RETRY_COASTING);
 }
+
+TEST_F(SpinControllerTest, RejectsOrClampsInvalidSpinConfig)
+{
+    controllers::SpinConfig invalid = config;
+    invalid.accel_motor_on_ms = 40000;
+    invalid.accel_max_wall_ms = 40000;
+    invalid.damping_min_off_ms = 8000;
+    invalid.damping_max_off_ms = 8000;
+    invalid.damping_sensor_timeout_ms = 0;
+    invalid.coast_down_ms = 0;
+
+    controllers::SpinController spin_invalid{mock_timer, mock_drain_pump, mock_motor, invalid};
+    EXPECT_FALSE(spin_invalid.is_config_valid());
+
+    const controllers::SpinConfig& cfg = spin_invalid.get_config();
+    EXPECT_LT(cfg.accel_motor_on_ms, cfg.accel_max_wall_ms);
+    EXPECT_LT(cfg.damping_min_off_ms, cfg.damping_max_off_ms);
+    EXPECT_GT(cfg.damping_sensor_timeout_ms, 0u);
+    EXPECT_GT(cfg.coast_down_ms, 0u);
+
+    // Clamped config should still run the ACCEL -> DUTY transition safely
+    spin_invalid.start(domain::WaterLevel::LOW_LEVEL, 60);
+    simulated_time_ms += 1000;
+    spin_invalid.update(); // CLUTCH -> ACCEL
+    ASSERT_EQ(spin_invalid.get_sub_phase(), controllers::SpinSubPhase::ACCEL);
+
+    simulated_time_ms += cfg.accel_motor_on_ms;
+    spin_invalid.update();
+    EXPECT_EQ(spin_invalid.get_sub_phase(), controllers::SpinSubPhase::DUTY_RUN_ON);
+}

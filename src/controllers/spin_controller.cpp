@@ -15,7 +15,43 @@ SpinController::SpinController(
     , damping_policy_(
           DampingConfig{config_.damping_min_off_ms, config_.damping_max_off_ms, config_.damping_sensor_timeout_ms})
     , vibration_monitor_(vibration_monitor)
-{}
+{
+    const SpinConfig defaults{};
+
+    if (config_.clutch_engage_ms == 0) {
+        config_.clutch_engage_ms = defaults.clutch_engage_ms;
+        is_config_valid_ = false;
+    }
+    if (config_.duty_on_ms == 0) {
+        config_.duty_on_ms = defaults.duty_on_ms;
+        is_config_valid_ = false;
+    }
+    if (config_.duty_off_ms == 0) {
+        config_.duty_off_ms = defaults.duty_off_ms;
+        is_config_valid_ = false;
+    }
+    if (config_.coast_down_ms == 0) {
+        config_.coast_down_ms = defaults.coast_down_ms;
+        is_config_valid_ = false;
+    }
+
+    if (config_.accel_motor_on_ms == 0 || config_.accel_max_wall_ms == 0 ||
+        config_.accel_motor_on_ms >= config_.accel_max_wall_ms) {
+        config_.accel_motor_on_ms = defaults.accel_motor_on_ms;
+        config_.accel_max_wall_ms = defaults.accel_max_wall_ms;
+        is_config_valid_ = false;
+    }
+
+    damping_policy_ = VibrationDampingPolicy(
+        DampingConfig{config_.damping_min_off_ms, config_.damping_max_off_ms, config_.damping_sensor_timeout_ms});
+    if (!damping_policy_.is_config_valid()) {
+        is_config_valid_ = false;
+        const DampingConfig& damped = damping_policy_.get_config();
+        config_.damping_min_off_ms = damped.min_off_ms;
+        config_.damping_max_off_ms = damped.max_off_ms;
+        config_.damping_sensor_timeout_ms = damped.sensor_timeout_ms;
+    }
+}
 
 void SpinController::start(domain::WaterLevel level, uint32_t duration_sec)
 {

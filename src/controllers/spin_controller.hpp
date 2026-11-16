@@ -147,6 +147,18 @@ public:
      */
     SpinSubPhase get_sub_phase() const { return sub_phase_; }
 
+    /**
+     * @brief Check whether runtime configuration passed invariant checks.
+     * @return true if valid, false if clamped to safe defaults.
+     */
+    bool is_config_valid() const { return is_config_valid_; }
+
+    /**
+     * @brief Get active configuration (after any clamping).
+     * @return Reference to SpinConfig.
+     */
+    const SpinConfig& get_config() const { return config_; }
+
 private:
     void transition_to_duty_run();
     void enter_vibe_damping(uint32_t now);
@@ -162,6 +174,7 @@ private:
     hal::IReversibleMotor& motor_;
     SpinConfig config_;
     VibrationDampingPolicy damping_policy_;
+    bool is_config_valid_{true};
 
     domain::WaterLevel level_{domain::WaterLevel::LOW_LEVEL};
     uint32_t duty_run_duration_ms_{0};
