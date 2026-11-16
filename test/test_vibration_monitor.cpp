@@ -23,7 +23,9 @@ protected:
         8500,  // 8500 LSB warning threshold
         11000, // 11000 LSB sustained trip threshold
         14000, // 14000 LSB immediate shock threshold
-        1000   // 1000 ms sustained trip duration
+        1000,  // 1000 ms sustained trip duration
+        4000,  // 4000 LSB warning clear (test expectation)
+        200    // 200 ms warning debounce
     };
 
     controllers::VibrationMonitor monitor{mock_accel, mock_timer, config};
