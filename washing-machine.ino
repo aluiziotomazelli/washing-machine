@@ -160,8 +160,9 @@ void loop()
         last_telemetry_ms = now;
         vib_monitor.update();
         Serial.print(vib_monitor.get_vibration());
-        Serial.print(',');
-        Serial.println(static_cast<uint8_t>(spin_ctrl.get_sub_phase()));
+        Serial.write(',');
+        Serial.write(static_cast<uint8_t>(spin_ctrl.get_sub_phase()) + '0');
+        Serial.write('\n');
     }
 
     // Process & UI coordination

@@ -203,7 +203,7 @@ class ITimerHAL
     uint32_t duty_on_ms{4000};
     uint32_t duty_off_ms{4000};
     uint32_t coast_down_ms{18000};
-    uint32_t accel_motor_on_ms{20000};
+    uint32_t accel_motor_on_ms{7000};
     uint32_t accel_max_wall_ms{40000};
     uint32_t damping_min_off_ms{800};
     uint32_t damping_max_off_ms{8000};
@@ -227,13 +227,13 @@ class ITimerHAL
 unchanged | | `duty_on_ms` | 4000 | Existing cruise pulse;
 unchanged | | `duty_off_ms` | 4000 | Existing cruise coast; unchanged |
 | `coast_down_ms` | **18000** | 10 s is insufficient for a full stop from cruise speed; see section 7.3 |
-| `accel_motor_on_ms` | 20000 | Initial target for accumulated motor-on acceleration time; calibrate with real loads |
+| `accel_motor_on_ms` | 7000 | Empirical target for accumulated motor-on acceleration time; calibrate with real loads |
 | `accel_max_wall_ms` | 40000 | Safety cap so repeated damping cannot hold the cycle in ACCEL indefinitely |
 | `damping_min_off_ms` | 800 | Prevent immediate re-engagement after a warning clears |
 | `damping_max_off_ms` | 8000 | Escalate instead of waiting indefinitely for vibration to clear |
 | `max_unbalance_retries` | **2** | More dry recovery opportunities; see section 7.1 |
 
-`accel_motor_on_ms` and `accel_max_wall_ms` are initial calibration values. The RPM report suggests a continuous ramp can cross the resonance band in a few seconds under light load. Twenty seconds of motor-on time is conservative for loaded conditions and avoids under-accelerating before the duty-run handover.
+`accel_motor_on_ms` and `accel_max_wall_ms` are empirical calibration values. The RPM report suggests a continuous ramp can cross the resonance band in a few seconds under light load. Seven seconds of motor-on time avoids the end-of-ramp resonance spike observed with two dry jeans while still reaching the duty-run handover.
 
 > `SpinConfig` is currently aggregate-initialized positionally in several tests. Removing sprint fields changes the member order. Update every aggregate initializer in `test_spin_controller.cpp`, `test_wash_cycle_coordinator.cpp`, and `test_panel_controller.cpp`.
 
@@ -247,25 +247,21 @@ struct VibrationConfig
     uint16_t sample_period_ms{20};
     uint8_t window_samples{10};
     uint16_t motion_threshold{400};
-    uint16_t accel_warning_threshold{6500};
+    uint16_t accel_warning_threshold{5500};
     uint16_t trip_threshold{11000};
     uint16_t shock_threshold{14000};
     uint16_t sustained_trip_duration_ms{1000};
-    uint16_t accel_warning_clear{4727};
-    uint16_t warning_debounce_ms{200};
+    uint16_t accel_warning_clear{4000};
+    uint16_t warning_debounce_ms{0};
 };
 ```
 
-    Threshold rationale :
+    Threshold rationale:
 
-    - `accel_warning_threshold` set to* *
-    6500 LSB**(ACCEL - only damping context) to react before critical trip while tolerating duty
-    /
-    tampa vibration;
-trip / shock remain active in all phases.- `accel_warning_clear` is* * 4727 LSB**(proportional hysteresis).Warning
-                                               / damping is active only during ACCEL(and ACCEL - origin damping); trip and shock remain active during duty.
-- `warning_debounce_ms` prevents a single motor-switching transient window from triggering a damping pause. Critical shocks remain immediate through `shock_threshold`.
-- Both thresholds must be validated with real wash loads before being treated as final.
+    - `accel_warning_threshold` is 5500 LSB (ACCEL-only damping context) to react before the end-of-ramp resonance spike while tolerating normal duty vibration; trip and shock remain active in all phases.
+    - `accel_warning_clear` is 4000 LSB (proportional hysteresis). Warning/damping is active only during ACCEL (and ACCEL-origin damping); trip and shock remain active during duty.
+    - `warning_debounce_ms` is 0: the monitor already integrates a 200 ms peak-to-peak window, so zero debounce latches on the first window above threshold and cuts one window of reaction latency. Any nonzero value up to 200 ms is equivalent to requiring the next window. Critical shocks remain immediate through `shock_threshold`.
+    - These thresholds must be validated with real wash loads before being treated as final.
 
 ### 5.3 Configuration invariants
 
@@ -772,7 +768,7 @@ Required new coverage:
 - Warning sets above `warning_threshold`.
 - Warning remains latched between `accel_warning_clear` and `accel_warning_threshold` during ACCEL-damping mode.
 - Warning clears below `warning_clear`.
-- `warning_debounce_ms` prevents a single-window transient from setting warning.
+- `warning_debounce_ms = 0` latches on the first 200 ms window; a nonzero debounce requires continuous windows above threshold.
 - `reset()` clears warning and debounce state.
 - Invalid `warning_clear >= warning_threshold` is rejected or clamped.
 - Sensor failure sets `is_sensor_ok()` false without silently clearing warning.
@@ -914,7 +910,7 @@ Acceptance observations:
 - [ ] `ACCEL` is the only acceleration phase.
 - [ ] `VIBE_DAMPING` is the only adaptive pause mechanism during acceleration and motor-on cruise.
 - [ ] `is_warning()` uses hysteresis with `warning_clear < warning_threshold`.
-- [ ] `warning_debounce_ms` prevents single-window transient pauses.
+- [ ] `warning_debounce_ms` semantics are documented (0 = first window; nonzero = continuous windows).
 - [ ] `VIBE_DAMPING` continues sampling the vibration monitor.
 - [ ] Critical unbalance is evaluated during `VIBE_DAMPING`.
 - [ ] Sensor failure cannot leave the motor off indefinitely.

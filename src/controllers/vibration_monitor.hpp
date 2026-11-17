@@ -16,12 +16,12 @@ struct VibrationConfig
     uint16_t sample_period_ms{20};             //!< Acquisition period (20 ms = 50 Hz).
     uint8_t window_samples{10};                //!< Samples per peak-to-peak window (10 = 200 ms).
     uint16_t motion_threshold{400};            //!< Minimum envelope to report physical movement.
-    uint16_t accel_warning_threshold{6500};    //!< Envelope that flags unbalance during ACCEL (damping).
+    uint16_t accel_warning_threshold{5500};    //!< Envelope that flags unbalance during ACCEL (damping).
     uint16_t trip_threshold{11000};            //!< Sustained envelope that triggers a trip.
     uint16_t shock_threshold{14000};           //!< Single-sample envelope that triggers an immediate trip.
     uint16_t sustained_trip_duration_ms{1000}; //!< Time above trip_threshold before latching a trip.
-    uint16_t accel_warning_clear{4727};        //!< Hysteresis clear during ACCEL (proportional to warning).
-    uint16_t warning_debounce_ms{200};         //!< Debounce duration above accel warning before latch.
+    uint16_t accel_warning_clear{4000};        //!< Hysteresis clear during ACCEL (proportional to warning).
+    uint16_t warning_debounce_ms{0};           //!< Debounce before latch (0 = first 200 ms window).
 };
 
 /**
@@ -49,8 +49,6 @@ public:
 
     /** @copydoc IVibrationMonitor::get_vibration */
     uint16_t get_vibration() const override { return current_vib_; }
-    /** @copydoc IVibrationMonitor::get_last_sample */
-    const hal::Vector3& get_last_sample() const override { return last_sample_; }
     /** @copydoc IVibrationMonitor::is_in_motion */
     bool is_in_motion() const override { return is_in_motion_; }
     /** @copydoc IVibrationMonitor::is_warning */
@@ -113,7 +111,6 @@ private:
     uint8_t sample_count_{0};
 
     // Evaluated state
-    hal::Vector3 last_sample_{};
     uint16_t current_vib_{0};
     bool is_in_motion_{false};
     bool is_warning_{false};

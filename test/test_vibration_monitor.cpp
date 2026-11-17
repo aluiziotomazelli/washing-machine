@@ -39,7 +39,14 @@ protected:
     }
 
     // Helper: Feed a window of 10 samples spanning min/max values
-    void feed_window(int16_t x_min, int16_t x_max, int16_t y_min, int16_t y_max, int16_t z_min, int16_t z_max)
+    void feed_window_to(
+        controllers::VibrationMonitor& target,
+        int16_t x_min,
+        int16_t x_max,
+        int16_t y_min,
+        int16_t y_max,
+        int16_t z_min,
+        int16_t z_max)
     {
         for (int i = 0; i < 10; ++i) {
             current_time_ms += 20;
@@ -59,8 +66,13 @@ protected:
 
             EXPECT_CALL(mock_accel, read_accel(_)).WillOnce(DoAll(SetArgReferee<0>(sample), Return(true)));
 
-            monitor.update();
+            target.update();
         }
+    }
+
+    void feed_window(int16_t x_min, int16_t x_max, int16_t y_min, int16_t y_max, int16_t z_min, int16_t z_max)
+    {
+        feed_window_to(monitor, x_min, x_max, y_min, y_max, z_min, z_max);
     }
 };
 
@@ -264,6 +276,20 @@ TEST_F(VibrationMonitorTest, RepeatedAccelModeEnableDoesNotResetWarningDebounce)
     // Window 2: still above threshold, debounce elapsed -> warning latches.
     feed_window(0, 3000, 0, 3000, 0, 3000);
     EXPECT_TRUE(monitor.is_warning());
+}
+
+TEST_F(VibrationMonitorTest, ZeroDebounceLatchesOnFirstWindowAboveThreshold)
+{
+    controllers::VibrationConfig fast_config = config;
+    fast_config.warning_debounce_ms = 0;
+    controllers::VibrationMonitor fast_monitor{mock_accel, mock_timer, fast_config};
+    fast_monitor.set_accel_damping_mode(true);
+
+    // A single 200 ms window at 9000 LSB (above warning 8500) latches
+    // immediately when debounce is zero.
+    feed_window_to(fast_monitor, 0, 3000, 0, 3000, 0, 3000);
+    EXPECT_EQ(fast_monitor.get_vibration(), 9000);
+    EXPECT_TRUE(fast_monitor.is_warning());
 }
 
 TEST_F(VibrationMonitorTest, WarningRemainsLatchedInHysteresisZone)

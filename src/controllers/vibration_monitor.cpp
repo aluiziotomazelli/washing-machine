@@ -99,8 +99,6 @@ void VibrationMonitor::update()
 
 void VibrationMonitor::process_sample(const hal::Vector3& sample, uint32_t now)
 {
-    last_sample_ = sample;
-
     if (sample.x < min_x_) {
         min_x_ = sample.x;
     }

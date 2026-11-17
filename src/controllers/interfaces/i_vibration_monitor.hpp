@@ -32,12 +32,6 @@ public:
     virtual uint16_t get_vibration() const = 0;
 
     /**
-     * @brief Most recent raw 3-axis accelerometer sample.
-     * @return Constant reference to the last sampled Vector3 (axis values in raw LSB).
-     */
-    virtual const hal::Vector3& get_last_sample() const = 0;
-
-    /**
      * @brief Whether physical movement is detected (agitation or drum spinning).
      * @return true if vibration exceeds motion threshold.
      */

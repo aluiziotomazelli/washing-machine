@@ -15,8 +15,9 @@ DEFAULT_PORT = "/dev/ttyUSB1"
 if os.path.exists("/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A9M9DV3R-if00-port0"):
     DEFAULT_PORT = os.path.realpath("/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A9M9DV3R-if00-port0")
 
-# vib,subphase
-PATTERN = re.compile(r"^\s*(-?\d+)\s*,\s*(\d+)\s*$")
+# vib,<phase-char>: firmware sends the subphase as ASCII '0'+phase
+# (':' = 10, ';' = 11) to keep the serial write path small.
+PATTERN = re.compile(r"^\s*(-?\d+)\s*,\s*(\S)\s*$")
 
 
 def main():
@@ -97,7 +98,9 @@ def main():
                 elapsed_ms = int(elapsed_s * 1000)
 
                 vib = int(match.group(1))
-                subphase = int(match.group(2))
+                subphase = ord(match.group(2)) - ord("0")
+                if subphase < 0 or subphase > 11:
+                    continue
 
                 f.write(f"{elapsed_ms},{elapsed_s:.3f},{vib},{subphase}\n")
                 samples.append(vib)
