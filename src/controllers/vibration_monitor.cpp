@@ -63,6 +63,9 @@ void VibrationMonitor::reset()
 
 void VibrationMonitor::set_accel_damping_mode(bool enabled)
 {
+    if (accel_damping_mode_ == enabled) {
+        return;
+    }
     accel_damping_mode_ = enabled;
     is_warning_ = false;
     warning_since_ms_ = 0;

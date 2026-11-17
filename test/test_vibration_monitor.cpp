@@ -251,6 +251,21 @@ TEST_F(VibrationMonitorTest, WarningRequiresDebounceContinuousAboveThreshold)
     EXPECT_TRUE(monitor.is_warning());
 }
 
+TEST_F(VibrationMonitorTest, RepeatedAccelModeEnableDoesNotResetWarningDebounce)
+{
+    // Window 1: above warning threshold, debounce timer starts.
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    EXPECT_FALSE(monitor.is_warning());
+
+    // SpinController re-syncs the mode on every update. Idempotent enable must
+    // preserve the debounce timer instead of restarting it.
+    monitor.set_accel_damping_mode(true);
+
+    // Window 2: still above threshold, debounce elapsed -> warning latches.
+    feed_window(0, 3000, 0, 3000, 0, 3000);
+    EXPECT_TRUE(monitor.is_warning());
+}
+
 TEST_F(VibrationMonitorTest, WarningRemainsLatchedInHysteresisZone)
 {
     // Latch warning with 2 windows at 9000 LSB
