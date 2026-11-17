@@ -109,7 +109,8 @@ washing-machine/
 * **Start/Pause**:
   * *Click*: Start selected cycle / Pause running cycle / Resume paused cycle.
   * *Long Click*: Advance (skip) currently active stage to the next stage.
-  * *Very Long Click*: Stop running cycle and return to idle.
+  * *Hold >= 2.5 s*: Stop the running cycle and return to idle without releasing the button.
+  * *Very Long Click*: Legacy stop-on-release behavior remains available.
   * **Obs:** Timing of clicks is defined in `washing-machine.ino` by `static ui::ButtonConfig btn_cfg{...}`
 * **Program**: Cycle through Heavy Wash -> Normal Wash -> Rinse Only -> Spin Only.
 * **Level**: Cycle water level between Low -> Medium -> High.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Record telemetry from Arduino MPU-6050 accelerometer to CSV file.
-Designed for washing machine spin vibration analysis.
+Record lean vibration telemetry (vib + spin subphase) from Arduino to CSV.
+Designed for washing machine spin vibration and damping analysis.
 """
 
 import sys
@@ -15,10 +15,13 @@ DEFAULT_PORT = "/dev/ttyUSB1"
 if os.path.exists("/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A9M9DV3R-if00-port0"):
     DEFAULT_PORT = os.path.realpath("/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A9M9DV3R-if00-port0")
 
-PATTERN = re.compile(r"X:([-\d]+)\s+Y:([-\d]+)\s+Z:([-\d]+)\s+Vib:([-\d]+)")
+# vib,<phase-char>: firmware sends the subphase as ASCII '0'+phase
+# (':' = 10, ';' = 11) to keep the serial write path small.
+PATTERN = re.compile(r"^\s*(-?\d+)\s*,\s*(\S)\s*$")
+
 
 def main():
-    parser = argparse.ArgumentParser(description="Record MPU-6050 telemetry to a CSV file.")
+    parser = argparse.ArgumentParser(description="Record vib/subphase telemetry to a CSV file.")
     parser.add_argument("-p", "--port", default=DEFAULT_PORT, help=f"Serial port (default: {DEFAULT_PORT})")
     parser.add_argument("-b", "--baud", type=int, default=115200, help="Baud rate (default: 115200)")
     parser.add_argument("-d", "--duration", type=float, default=60.0, help="Recording duration in seconds (default: 60s)")
@@ -31,7 +34,7 @@ def main():
         args.output = f"logs/spin_{timestamp_str}.csv"
 
     print("=" * 70)
-    print(" WASHING MACHINE: MPU-6050 TELEMETRY RECORDER")
+    print(" WASHING MACHINE: TELEMETRY RECORDER (VIB + SUBPHASE)")
     print("=" * 70)
     print(f"Serial port : {args.port}")
     print(f"Baud rate   : {args.baud}")
@@ -54,17 +57,18 @@ def main():
     time.sleep(0.5)
     ser.reset_input_buffer()
 
-    print("Synchronizing with MPU-6050 stream...")
+    print("Synchronizing with telemetry stream...")
     samples = []
     max_vib = 0
     min_vib = 999999
     sum_vib = 0
 
     start_time = None
+    elapsed_s = 0.0
 
     try:
         with open(args.output, "w", encoding="utf-8") as f:
-            f.write("elapsed_ms,elapsed_s,x,y,z,vib\n")
+            f.write("elapsed_ms,elapsed_s,vib,subphase\n")
 
             while True:
                 try:
@@ -81,7 +85,7 @@ def main():
                 if not line:
                     continue
 
-                match = PATTERN.search(line)
+                match = PATTERN.match(line)
                 if not match:
                     continue
 
@@ -93,12 +97,12 @@ def main():
                 elapsed_s = now - start_time
                 elapsed_ms = int(elapsed_s * 1000)
 
-                x = int(match.group(1))
-                y = int(match.group(2))
-                z = int(match.group(3))
-                vib = int(match.group(4))
+                vib = int(match.group(1))
+                subphase = ord(match.group(2)) - ord("0")
+                if subphase < 0 or subphase > 11:
+                    continue
 
-                f.write(f"{elapsed_ms},{elapsed_s:.3f},{x},{y},{z},{vib}\n")
+                f.write(f"{elapsed_ms},{elapsed_s:.3f},{vib},{subphase}\n")
                 samples.append(vib)
 
                 if vib > max_vib:
@@ -114,7 +118,7 @@ def main():
 
                 sys.stdout.write(
                     f"\r[{bar}] {elapsed_s:4.1f}s / {args.duration:4.1f}s | "
-                    f"Samples: {len(samples):4d} | Current Vib: {vib:5d} | Max Vib: {max_vib:5d}"
+                    f"Samples: {len(samples):4d} | Vib: {vib:5d} | Ph: {subphase:2d}"
                 )
                 sys.stdout.flush()
 
@@ -142,6 +146,7 @@ def main():
     else:
         print("No samples collected.")
     print("=" * 70)
+
 
 if __name__ == "__main__":
     main()

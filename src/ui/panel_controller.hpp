@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include "../domain/wash_types.hpp"
+#include "hold_detector.hpp"
 #include "interfaces/i_button.hpp"
 #include "interfaces/i_led_panel.hpp"
 #include "interfaces/i_buzzer.hpp"
@@ -24,9 +25,11 @@ class DiagnosticController;
  * @brief User Interface controller translating button inputs into coordinator commands
  * and synchronizing LED/buzzer state with the running machine state.
  */
-class PanelController {
+class PanelController
+{
 public:
     static constexpr uint32_t k_diag_trigger_hold_ms{2500};
+    static constexpr uint32_t k_stop_trigger_hold_ms{2500};
 
     /**
      * @brief Construct the UI panel controller with all input/output resources.
@@ -51,8 +54,7 @@ public:
         fsm::WashCycleCoordinator& coordinator,
         DiagnosticController* diag_ctrl = nullptr,
         hal::ITimerHAL* timer_hal = nullptr,
-        persistence::ICyclePersistence* persistence = nullptr
-    );
+        persistence::ICyclePersistence* persistence = nullptr);
 
     /**
      * @brief Initialize inputs, outputs and restore persisted user preferences.
@@ -109,7 +111,9 @@ private:
     domain::WashProgram selected_program_{domain::WashProgram::RINSE_ONLY};
     domain::WaterLevel selected_level_{domain::WaterLevel::LOW_LEVEL};
     bool softener_enabled_{false};
-    uint32_t diag_entry_press_start_ms_{0};
+    HoldDetector diag_hold_{k_diag_trigger_hold_ms};
+    HoldDetector stop_hold_{k_stop_trigger_hold_ms};
+    bool suppress_start_release_click_{false};
 
     domain::MachineState prev_state_{domain::MachineState::IDLE};
     domain::WashStage prev_stage_{domain::WashStage::IDLE};

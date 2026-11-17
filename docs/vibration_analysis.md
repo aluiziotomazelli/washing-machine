@@ -148,11 +148,11 @@ The optimal sprint sequence established in test 9 and verified on empty basket i
 
 ## Empirical threshold calibration
 
-Based on all ten test runs, the vibration domain divides into four operational zones:
+Based on all ten test runs, the vibration domain divides into four empirical zones. The current ACCEL warning threshold is **3500 LSB**, deliberately below the 5000 LSB normal boundary so the controller reacts before the resonance envelope escalates; the zones below describe the mechanical observations, not the firmware trigger points.
 
 | Vibration index (Vib) | Operational status | Mechanical meaning |
 | :--- | :--- | :--- |
 | Below 5000 | Normal | Empty or properly balanced load. Steady cruising operation. |
 | 5000 to 8500 | Tolerable imbalance | Uneven wet clothes. Noticeable cabinet oscillation, but well within static friction limits. No risk of walking. |
 | 8500 to 11000 | Warning | Severe unbalance approaching mechanical suspension limits. Cabinet rocking heavily. |
-| Above 11000 sustained (> 1.0s) or single shock above 14000 | Critical trip | Static friction failure threshold. Cabinet walking or suspension bottoming imminent. |
+| Above 11000 sustained (> 0.8s) or single shock above 14000 | Critical trip | Static friction failure threshold. Cabinet walking or suspension bottoming imminent. |

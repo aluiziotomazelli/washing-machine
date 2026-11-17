@@ -12,12 +12,13 @@
 #include "mocks/mock_cycle_persistence.hpp"
 #include "fsm/wash_cycle_coordinator.hpp"
 
+using ::testing::AtLeast;
+using ::testing::Invoke;
 using ::testing::NiceMock;
 using ::testing::Return;
-using ::testing::Invoke;
-using ::testing::AtLeast;
 
-class WashCycleCoordinatorTest : public ::testing::Test {
+class WashCycleCoordinatorTest : public ::testing::Test
+{
 protected:
     NiceMock<mocks::MockTimerHAL> mock_timer;
     NiceMock<mocks::MockDigitalOutput> mock_valve_main;
@@ -45,30 +46,20 @@ protected:
         2,   // 2s final spin
         1,   // 1 max unbalance recovery
         1,   // 1s unbalance agitate
-        domain::WaterLevel::LOW_LEVEL
-    };
+        domain::WaterLevel::LOW_LEVEL};
 
     controllers::FillController fill_ctrl{mock_timer, mock_valve_main, mock_valve_softener, mock_water_sensor, 5000};
     controllers::Agitator agitator{mock_timer, mock_motor};
     controllers::DrainController drain_ctrl{mock_timer, mock_drain_pump, mock_water_sensor, 5000};
-    controllers::SpinConfig spin_config{100, 100, 100, 200, nullptr, 0, 2};
+    controllers::SpinConfig spin_config{100, 100, 100, 200, 100, 400, 50, 400, 200, 2};
     controllers::SpinController spin_ctrl{mock_timer, mock_drain_pump, mock_motor, spin_config, &mock_vib};
 
-    fsm::WashCycleCoordinator coordinator{
-        mock_timer,
-        fill_ctrl,
-        agitator,
-        drain_ctrl,
-        spin_ctrl,
-        config
-    };
+    fsm::WashCycleCoordinator coordinator{mock_timer, fill_ctrl, agitator, drain_ctrl, spin_ctrl, config};
 
     void SetUp() override
     {
         simulated_time_ms = 0;
-        ON_CALL(mock_timer, get_time_ms()).WillByDefault(Invoke([this]() {
-            return simulated_time_ms;
-        }));
+        ON_CALL(mock_timer, get_time_ms()).WillByDefault(Invoke([this]() { return simulated_time_ms; }));
     }
 };
 
@@ -360,18 +351,26 @@ TEST_F(WashCycleCoordinatorTest, TransitionsToUnbalancedLoadErrorAndResumes)
     ON_CALL(mock_vib, is_critical_unbalance()).WillByDefault(Return(true));
 
     // Trip 1 -> RETRY_COASTING (200ms) -> Clutch (100ms)
-    simulated_time_ms += 50;  coordinator.update();
-    simulated_time_ms += 200; coordinator.update();
-    simulated_time_ms += 100; coordinator.update();
+    simulated_time_ms += 50;
+    coordinator.update();
+    simulated_time_ms += 200;
+    coordinator.update();
+    simulated_time_ms += 100;
+    coordinator.update();
 
     // Trip 2 -> RETRY_COASTING (200ms) -> Clutch (100ms)
-    simulated_time_ms += 50;  coordinator.update();
-    simulated_time_ms += 200; coordinator.update();
-    simulated_time_ms += 100; coordinator.update();
+    simulated_time_ms += 50;
+    coordinator.update();
+    simulated_time_ms += 200;
+    coordinator.update();
+    simulated_time_ms += 100;
+    coordinator.update();
 
     // Trip 3 (exhausts 2 dry retries) -> enters STOP_COASTING (200ms) -> completes and transitions to RECOVERY_FILL
-    simulated_time_ms += 50;  coordinator.update();
-    simulated_time_ms += 200; coordinator.update();
+    simulated_time_ms += 50;
+    coordinator.update();
+    simulated_time_ms += 200;
+    coordinator.update();
 
     // Coordinator intercepts spin error and starts hydraulic recovery!
     EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::RECOVERY_FILL);
@@ -413,18 +412,27 @@ TEST_F(WashCycleCoordinatorTest, HydraulicRecoveryExhaustionLatchesUnbalancedLoa
     coordinator.advance_step(); // moves to SPIN_FINAL
 
     // Fast-forward unbalance to exhaust dry retries
-    simulated_time_ms += 100; coordinator.update();
+    simulated_time_ms += 100;
+    coordinator.update();
     ON_CALL(mock_vib, is_critical_unbalance()).WillByDefault(Return(true));
 
     // Exhaust 2 dry retries
-    simulated_time_ms += 50;  coordinator.update();
-    simulated_time_ms += 200; coordinator.update();
-    simulated_time_ms += 100; coordinator.update();
-    simulated_time_ms += 50;  coordinator.update();
-    simulated_time_ms += 200; coordinator.update();
-    simulated_time_ms += 100; coordinator.update();
-    simulated_time_ms += 50;  coordinator.update();
-    simulated_time_ms += 200; coordinator.update(); // triggers RECOVERY_FILL
+    simulated_time_ms += 50;
+    coordinator.update();
+    simulated_time_ms += 200;
+    coordinator.update();
+    simulated_time_ms += 100;
+    coordinator.update();
+    simulated_time_ms += 50;
+    coordinator.update();
+    simulated_time_ms += 200;
+    coordinator.update();
+    simulated_time_ms += 100;
+    coordinator.update();
+    simulated_time_ms += 50;
+    coordinator.update();
+    simulated_time_ms += 200;
+    coordinator.update(); // triggers RECOVERY_FILL
 
     EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::RECOVERY_FILL);
 
@@ -441,15 +449,24 @@ TEST_F(WashCycleCoordinatorTest, HydraulicRecoveryExhaustionLatchesUnbalancedLoa
     EXPECT_EQ(coordinator.get_current_step(), fsm::CycleStep::SPIN_FINAL);
 
     // In the second spin attempt, unbalance persists!
-    simulated_time_ms += 100; coordinator.update();
-    simulated_time_ms += 50;  coordinator.update();
-    simulated_time_ms += 200; coordinator.update();
-    simulated_time_ms += 100; coordinator.update();
-    simulated_time_ms += 50;  coordinator.update();
-    simulated_time_ms += 200; coordinator.update();
-    simulated_time_ms += 100; coordinator.update();
-    simulated_time_ms += 50;  coordinator.update();
-    simulated_time_ms += 200; coordinator.update(); // dry retries exhausted again -> complete coast down
+    simulated_time_ms += 100;
+    coordinator.update();
+    simulated_time_ms += 50;
+    coordinator.update();
+    simulated_time_ms += 200;
+    coordinator.update();
+    simulated_time_ms += 100;
+    coordinator.update();
+    simulated_time_ms += 50;
+    coordinator.update();
+    simulated_time_ms += 200;
+    coordinator.update();
+    simulated_time_ms += 100;
+    coordinator.update();
+    simulated_time_ms += 50;
+    coordinator.update();
+    simulated_time_ms += 200;
+    coordinator.update(); // dry retries exhausted again -> complete coast down
 
     // Since hydraulic recovery was already attempted once, it now latches ERROR!
     EXPECT_EQ(coordinator.get_state(), domain::MachineState::ERROR);
@@ -470,25 +487,32 @@ TEST_F(WashCycleCoordinatorTest, NoRecoveryWhenMaxRecoveriesIsZero)
     fsm::CoordinatorConfig zero_rec_cfg = config;
     zero_rec_cfg.max_unbalance_recoveries = 0;
 
-    fsm::WashCycleCoordinator direct_coord{
-        mock_timer, fill_ctrl, agitator, drain_ctrl, spin_ctrl, zero_rec_cfg
-    };
+    fsm::WashCycleCoordinator direct_coord{mock_timer, fill_ctrl, agitator, drain_ctrl, spin_ctrl, zero_rec_cfg};
 
     direct_coord.start_cycle(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false);
     direct_coord.advance_step(); // moves to SPIN_FINAL
 
     // Fast-forward unbalance to exhaust dry retries
-    simulated_time_ms += 100; direct_coord.update();
+    simulated_time_ms += 100;
+    direct_coord.update();
     ON_CALL(mock_vib, is_critical_unbalance()).WillByDefault(Return(true));
 
-    simulated_time_ms += 50;  direct_coord.update();
-    simulated_time_ms += 200; direct_coord.update();
-    simulated_time_ms += 100; direct_coord.update();
-    simulated_time_ms += 50;  direct_coord.update();
-    simulated_time_ms += 200; direct_coord.update();
-    simulated_time_ms += 100; direct_coord.update();
-    simulated_time_ms += 50;  direct_coord.update();
-    simulated_time_ms += 200; direct_coord.update();
+    simulated_time_ms += 50;
+    direct_coord.update();
+    simulated_time_ms += 200;
+    direct_coord.update();
+    simulated_time_ms += 100;
+    direct_coord.update();
+    simulated_time_ms += 50;
+    direct_coord.update();
+    simulated_time_ms += 200;
+    direct_coord.update();
+    simulated_time_ms += 100;
+    direct_coord.update();
+    simulated_time_ms += 50;
+    direct_coord.update();
+    simulated_time_ms += 200;
+    direct_coord.update();
 
     // Immediately trips to ERROR without hydraulic recovery
     EXPECT_EQ(direct_coord.get_state(), domain::MachineState::ERROR);
@@ -517,15 +541,22 @@ TEST_F(WashCycleCoordinatorTest, PersistsProgressAtStepTransitionsAndClearsOnFin
     coordinator.set_persistence(&mock_pers);
 
     // Step 0 (DRAIN) of SPIN_ONLY should save progress
-    EXPECT_CALL(mock_pers, save_cycle_progress(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false, 0, false, false)).Times(1);
+    EXPECT_CALL(
+        mock_pers,
+        save_cycle_progress(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false, 0, false, false))
+        .Times(1);
     coordinator.start_cycle(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false);
 
     // Step 1 (SPIN_FINAL) should save progress
-    EXPECT_CALL(mock_pers, save_cycle_progress(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false, 1, false, false)).Times(1);
+    EXPECT_CALL(
+        mock_pers,
+        save_cycle_progress(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false, 1, false, false))
+        .Times(1);
     coordinator.advance_step();
 
     // Advance past final step finishes cycle and saves finished
-    EXPECT_CALL(mock_pers, save_cycle_finished(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false)).Times(1);
+    EXPECT_CALL(mock_pers, save_cycle_finished(domain::WashProgram::SPIN_ONLY, domain::WaterLevel::LOW_LEVEL, false))
+        .Times(1);
     coordinator.advance_step();
 
     EXPECT_EQ(coordinator.get_state(), domain::MachineState::FINISHED);
@@ -536,10 +567,14 @@ TEST_F(WashCycleCoordinatorTest, StopCycleCallsSaveCycleFinished)
     mocks::MockCyclePersistence mock_pers;
     coordinator.set_persistence(&mock_pers);
 
-    EXPECT_CALL(mock_pers, save_cycle_progress(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::HIGH_LEVEL, true, 0, false, false)).Times(1);
+    EXPECT_CALL(
+        mock_pers,
+        save_cycle_progress(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::HIGH_LEVEL, true, 0, false, false))
+        .Times(1);
     coordinator.start_cycle(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::HIGH_LEVEL, true);
 
-    EXPECT_CALL(mock_pers, save_cycle_finished(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::HIGH_LEVEL, true)).Times(1);
+    EXPECT_CALL(mock_pers, save_cycle_finished(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::HIGH_LEVEL, true))
+        .Times(1);
     coordinator.stop_cycle();
 
     EXPECT_EQ(coordinator.get_state(), domain::MachineState::IDLE);
@@ -550,16 +585,25 @@ TEST_F(WashCycleCoordinatorTest, PausingAndResumingCyclePersistsPausedFlag)
     mocks::MockCyclePersistence mock_pers;
     coordinator.set_persistence(&mock_pers);
 
-    EXPECT_CALL(mock_pers, save_cycle_progress(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false, 0, false, false)).Times(1);
+    EXPECT_CALL(
+        mock_pers,
+        save_cycle_progress(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false, 0, false, false))
+        .Times(1);
     coordinator.start_cycle(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false);
 
     // Pause cycle should persist is_paused = true
-    EXPECT_CALL(mock_pers, save_cycle_progress(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false, 0, false, true)).Times(1);
+    EXPECT_CALL(
+        mock_pers,
+        save_cycle_progress(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false, 0, false, true))
+        .Times(1);
     coordinator.pause_cycle();
     EXPECT_EQ(coordinator.get_state(), domain::MachineState::PAUSED);
 
     // Resume cycle should persist is_paused = false
-    EXPECT_CALL(mock_pers, save_cycle_progress(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false, 0, false, false)).Times(1);
+    EXPECT_CALL(
+        mock_pers,
+        save_cycle_progress(domain::WashProgram::NORMAL_WASH, domain::WaterLevel::LOW_LEVEL, false, 0, false, false))
+        .Times(1);
     coordinator.resume_cycle();
     EXPECT_EQ(coordinator.get_state(), domain::MachineState::RUNNING);
 }

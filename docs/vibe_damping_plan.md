@@ -1,5 +1,7 @@
 # Adaptive Vibration Damping — Architecture Plan
 
+> **Historical design document:** The implemented ACCEL-only tuning is documented in `docs/accel_vibe_damping_refactor_plan.md` (warning 3500/2000 LSB, damping min-off 2500 ms, sustained trip 800 ms). The 5500/4000 LSB values below are the original proposal and are kept for rationale.
+
 ## Background
 
 The current spin cycle uses a **statically calibrated sprint profile** (four ON/OFF timed pulses)

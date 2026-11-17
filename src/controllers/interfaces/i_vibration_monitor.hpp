@@ -9,7 +9,8 @@ namespace controllers {
  * @interface IVibrationMonitor
  * @brief Interface for mechanical vibration tracking, motion detection, and unbalance protection.
  */
-class IVibrationMonitor {
+class IVibrationMonitor
+{
 public:
     virtual ~IVibrationMonitor() = default;
 
@@ -31,12 +32,6 @@ public:
     virtual uint16_t get_vibration() const = 0;
 
     /**
-     * @brief Most recent raw 3-axis accelerometer sample.
-     * @return Constant reference to the last sampled Vector3 (axis values in raw LSB).
-     */
-    virtual const hal::Vector3& get_last_sample() const = 0;
-
-    /**
      * @brief Whether physical movement is detected (agitation or drum spinning).
      * @return true if vibration exceeds motion threshold.
      */
@@ -50,7 +45,7 @@ public:
 
     /**
      * @brief Whether critical unbalance trip condition was reached.
-     * @return true if vibration exceeded sustained limit (> 1s) or immediate shock threshold.
+     * @return true if vibration exceeded the sustained limit (800 ms default) or immediate shock threshold.
      */
     virtual bool is_critical_unbalance() const = 0;
 
@@ -64,6 +59,15 @@ public:
      * @brief Reset trip and warning flags, and clear sampling buffer.
      */
     virtual void reset() = 0;
+
+    /**
+     * @brief Enable ACCEL-sensitive warning evaluation (damping context).
+     * When enabled, envelope warning uses accel thresholds/debounce/hysteresis.
+     * When disabled, damping-warning is not latched/held, but trip/shock/motion/sensor
+     * health continue to be evaluated.
+     * @param enabled true while in ACCEL or damping that must resume to ACCEL.
+     */
+    virtual void set_accel_damping_mode(bool enabled) = 0;
 };
 
 } // namespace controllers

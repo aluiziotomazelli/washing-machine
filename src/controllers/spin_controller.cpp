@@ -12,8 +12,47 @@ SpinController::SpinController(
     , drain_pump_(drain_pump)
     , motor_(motor)
     , config_(config)
+    , damping_policy_()
     , vibration_monitor_(vibration_monitor)
 {
+    const SpinConfig defaults{};
+
+    if (config_.clutch_engage_ms == 0) {
+        config_.clutch_engage_ms = defaults.clutch_engage_ms;
+        is_config_valid_ = false;
+    }
+    if (config_.duty_on_ms == 0) {
+        config_.duty_on_ms = defaults.duty_on_ms;
+        is_config_valid_ = false;
+    }
+    if (config_.duty_off_ms == 0) {
+        config_.duty_off_ms = defaults.duty_off_ms;
+        is_config_valid_ = false;
+    }
+    if (config_.coast_down_ms == 0) {
+        config_.coast_down_ms = defaults.coast_down_ms;
+        is_config_valid_ = false;
+    }
+
+    if (config_.accel_motor_on_ms == 0 || config_.accel_max_wall_ms == 0 ||
+        config_.accel_motor_on_ms >= config_.accel_max_wall_ms) {
+        config_.accel_motor_on_ms = defaults.accel_motor_on_ms;
+        config_.accel_max_wall_ms = defaults.accel_max_wall_ms;
+        is_config_valid_ = false;
+    }
+
+    DampingConfig damping_config;
+    damping_config.min_off_ms = config_.damping_min_off_ms;
+    damping_config.max_off_ms = config_.damping_max_off_ms;
+    damping_config.sensor_timeout_ms = config_.damping_sensor_timeout_ms;
+    damping_policy_ = VibrationDampingPolicy(damping_config);
+    if (!damping_policy_.is_config_valid()) {
+        is_config_valid_ = false;
+        const DampingConfig& damped = damping_policy_.get_config();
+        config_.damping_min_off_ms = damped.min_off_ms;
+        config_.damping_max_off_ms = damped.max_off_ms;
+        config_.damping_sensor_timeout_ms = damped.sensor_timeout_ms;
+    }
 }
 
 void SpinController::start(domain::WaterLevel level, uint32_t duration_sec)
@@ -21,30 +60,160 @@ void SpinController::start(domain::WaterLevel level, uint32_t duration_sec)
     level_ = level;
     duty_run_duration_ms_ = duration_sec * 1000;
 
-    current_sprint_idx_ = 0;
-    total_sprints_ = config_.sprint_count;
-    if (config_.sprints && total_sprints_ > 0) {
-        current_sprint_on_ms_ = config_.sprints[0].on_ms;
-        current_sprint_off_ms_ = config_.sprints[0].off_ms;
-    }
-    else {
-        current_sprint_on_ms_ = 0;
-        current_sprint_off_ms_ = 0;
-    }
-
     is_active_ = true;
     is_paused_ = false;
     is_finished_ = false;
     duty_run_elapsed_before_pause_ms_ = 0;
+    duty_run_start_ms_ = 0;
+    damping_phase_elapsed_ms_ = 0;
+    damping_start_ms_ = 0;
+    sensor_bad_since_ms_ = 0;
+    sensor_bad_ = false;
+    accel_timeline_.reset();
     reset_error();
 
-    // Always engage drain pump throughout entire spin
     drain_pump_.turn_on();
     motor_.stop();
 
     sub_phase_ = SpinSubPhase::CLUTCH_ENGAGE;
-    resume_target_phase_ = SpinSubPhase::SPRINT_ON;
+    resume_target_phase_ = SpinSubPhase::ACCEL;
+    damping_return_phase_ = SpinSubPhase::ACCEL;
     phase_start_ms_ = timer_hal_.get_time_ms();
+}
+
+void SpinController::sync_accel_damping_mode()
+{
+    if (vibration_monitor_ == nullptr) {
+        return;
+    }
+    bool enable = (sub_phase_ == SpinSubPhase::ACCEL) ||
+                  (sub_phase_ == SpinSubPhase::VIBE_DAMPING && damping_return_phase_ == SpinSubPhase::ACCEL);
+    vibration_monitor_->set_accel_damping_mode(enable);
+}
+
+void SpinController::update_sensor_bad_tracking(uint32_t now)
+{
+    if (vibration_monitor_ == nullptr) {
+        sensor_bad_ = false;
+        sensor_bad_since_ms_ = 0;
+        return;
+    }
+
+    bool ok = vibration_monitor_->is_sensor_ok();
+    if (ok) {
+        sensor_bad_ = false;
+        sensor_bad_since_ms_ = 0;
+        return;
+    }
+
+    if (!sensor_bad_) {
+        sensor_bad_ = true;
+        sensor_bad_since_ms_ = now;
+    }
+}
+
+uint32_t SpinController::sensor_bad_duration_ms(uint32_t now) const
+{
+    if (!sensor_bad_) {
+        return 0;
+    }
+    return (now >= sensor_bad_since_ms_) ? (now - sensor_bad_since_ms_) : 0;
+}
+
+DampingInput SpinController::make_damping_input(uint32_t now) const
+{
+    DampingInput input{};
+    if (vibration_monitor_ != nullptr) {
+        input.sensor_ok = vibration_monitor_->is_sensor_ok();
+        input.warning = vibration_monitor_->is_warning();
+        input.critical = vibration_monitor_->is_critical_unbalance();
+    }
+    input.now_ms = now;
+    input.damping_elapsed_ms = (now >= damping_start_ms_) ? (now - damping_start_ms_) : 0;
+    input.sensor_bad_duration_ms = sensor_bad_duration_ms(now);
+    return input;
+}
+
+void SpinController::enter_retry_or_stop(uint32_t now)
+{
+    if (sub_phase_ == SpinSubPhase::ACCEL) {
+        accel_timeline_.on_motor_off(now);
+    }
+    if (sub_phase_ == SpinSubPhase::DUTY_RUN_ON) {
+        duty_run_elapsed_before_pause_ms_ += (now - duty_run_start_ms_);
+        duty_run_start_ms_ = now;
+    }
+
+    motor_.stop();
+
+    if (unbalance_retries_ < config_.max_unbalance_retries) {
+        unbalance_retries_++;
+        sub_phase_ = SpinSubPhase::RETRY_COASTING;
+    }
+    else {
+        sub_phase_ = SpinSubPhase::STOP_COASTING;
+    }
+    phase_start_ms_ = now;
+}
+
+void SpinController::enter_vibe_damping(uint32_t now)
+{
+    if (sub_phase_ != SpinSubPhase::ACCEL && sub_phase_ != SpinSubPhase::DUTY_RUN_ON) {
+        return;
+    }
+
+    damping_return_phase_ = sub_phase_;
+    damping_phase_elapsed_ms_ = now - phase_start_ms_;
+    damping_start_ms_ = now;
+
+    if (sub_phase_ == SpinSubPhase::DUTY_RUN_ON) {
+        duty_run_elapsed_before_pause_ms_ += (now - duty_run_start_ms_);
+        duty_run_start_ms_ = now;
+    }
+    if (sub_phase_ == SpinSubPhase::ACCEL) {
+        accel_timeline_.on_motor_off(now);
+    }
+
+    motor_.stop();
+    sub_phase_ = SpinSubPhase::VIBE_DAMPING;
+    phase_start_ms_ = now;
+}
+
+void SpinController::resume_from_vibe_damping(uint32_t now)
+{
+    sub_phase_ = damping_return_phase_;
+    if (sub_phase_ == SpinSubPhase::ACCEL) {
+        phase_start_ms_ = now;
+        motor_.rotate_clockwise();
+        accel_timeline_.on_motor_on(now);
+        sync_accel_damping_mode();
+        return;
+    }
+
+    if (sub_phase_ == SpinSubPhase::DUTY_RUN_ON) {
+        duty_run_start_ms_ = now;
+        phase_start_ms_ = now - damping_phase_elapsed_ms_;
+        motor_.rotate_clockwise();
+        sync_accel_damping_mode();
+        return;
+    }
+
+    sub_phase_ = SpinSubPhase::ACCEL;
+    resume_target_phase_ = SpinSubPhase::ACCEL;
+    phase_start_ms_ = now;
+}
+
+void SpinController::handle_vibe_damping(uint32_t now)
+{
+    DampingInput input = make_damping_input(now);
+    DampingAction action = damping_policy_.evaluate(input, false, true);
+    if (action == DampingAction::ESCALATE) {
+        enter_retry_or_stop(now);
+        return;
+    }
+    if (action == DampingAction::RESUME || damping_policy_.can_resume(input, input.damping_elapsed_ms)) {
+        resume_from_vibe_damping(now);
+    }
 }
 
 void SpinController::update()
@@ -55,25 +224,37 @@ void SpinController::update()
 
     uint32_t now = timer_hal_.get_time_ms();
 
-    bool is_spinning =
-        (sub_phase_ == SpinSubPhase::SPRINT_ON || sub_phase_ == SpinSubPhase::SPRINT_OFF ||
+    bool monitor_active =
+        (sub_phase_ == SpinSubPhase::ACCEL || sub_phase_ == SpinSubPhase::VIBE_DAMPING ||
          sub_phase_ == SpinSubPhase::DUTY_RUN_ON || sub_phase_ == SpinSubPhase::DUTY_RUN_OFF);
 
-    // Out-of-balance safety monitor during active spin
-    if (vibration_monitor_ != nullptr && is_spinning) {
+    if (vibration_monitor_ != nullptr && monitor_active) {
+        sync_accel_damping_mode();
         vibration_monitor_->update();
+        update_sensor_bad_tracking(now);
+
         if (vibration_monitor_->is_critical_unbalance()) {
-            motor_.stop();
-            if (unbalance_retries_ < config_.max_unbalance_retries) {
-                unbalance_retries_++;
-                sub_phase_ = SpinSubPhase::RETRY_COASTING;
-                phase_start_ms_ = now;
-            }
-            else {
-                sub_phase_ = SpinSubPhase::STOP_COASTING;
-                phase_start_ms_ = now;
-            }
+            enter_retry_or_stop(now);
             return;
+        }
+
+        if ((sub_phase_ == SpinSubPhase::ACCEL || sub_phase_ == SpinSubPhase::DUTY_RUN_ON) &&
+            sensor_bad_duration_ms(now) >= config_.damping_sensor_timeout_ms) {
+            enter_retry_or_stop(now);
+            return;
+        }
+
+        if (sub_phase_ == SpinSubPhase::ACCEL && vibration_monitor_->is_warning()) {
+            enter_vibe_damping(now);
+            return;
+        }
+
+        if (sub_phase_ == SpinSubPhase::VIBE_DAMPING) {
+            handle_vibe_damping(now);
+            if (sub_phase_ == SpinSubPhase::VIBE_DAMPING || sub_phase_ == SpinSubPhase::RETRY_COASTING ||
+                sub_phase_ == SpinSubPhase::STOP_COASTING) {
+                return;
+            }
         }
     }
 
@@ -84,36 +265,28 @@ void SpinController::update()
         if (elapsed_in_phase >= config_.clutch_engage_ms) {
             sub_phase_ = resume_target_phase_;
             phase_start_ms_ = now;
-            if (sub_phase_ == SpinSubPhase::DUTY_RUN_ON || sub_phase_ == SpinSubPhase::DUTY_RUN_OFF) {
+            if (sub_phase_ == SpinSubPhase::ACCEL) {
+                accel_timeline_.start(now, config_.accel_motor_on_ms, config_.accel_max_wall_ms);
+                motor_.rotate_clockwise();
+                accel_timeline_.on_motor_on(now);
+            }
+            else if (sub_phase_ == SpinSubPhase::DUTY_RUN_ON || sub_phase_ == SpinSubPhase::DUTY_RUN_OFF) {
                 duty_run_start_ms_ = now;
-            }
-            motor_.rotate_clockwise();
-        }
-        break;
-
-    case SpinSubPhase::SPRINT_ON:
-        if (elapsed_in_phase >= current_sprint_on_ms_) {
-            motor_.stop();
-            sub_phase_ = SpinSubPhase::SPRINT_OFF;
-            phase_start_ms_ = now;
-        }
-        break;
-
-    case SpinSubPhase::SPRINT_OFF:
-        if (elapsed_in_phase >= current_sprint_off_ms_) {
-            current_sprint_idx_++;
-            if (current_sprint_idx_ >= total_sprints_) {
-                // All sprints completed -> enter duty run regime
-                transition_to_duty_run();
-            }
-            else {
-                current_sprint_on_ms_ = config_.sprints[current_sprint_idx_].on_ms;
-                current_sprint_off_ms_ = config_.sprints[current_sprint_idx_].off_ms;
-                sub_phase_ = SpinSubPhase::SPRINT_ON;
-                phase_start_ms_ = now;
                 motor_.rotate_clockwise();
             }
+            sync_accel_damping_mode();
         }
+        break;
+
+    case SpinSubPhase::ACCEL:
+        accel_timeline_.on_motor_on(now);
+        if (accel_timeline_.is_complete(now)) {
+            accel_timeline_.on_motor_off(now);
+            transition_to_duty_run();
+        }
+        break;
+
+    case SpinSubPhase::VIBE_DAMPING:
         break;
 
     case SpinSubPhase::DUTY_RUN_ON:
@@ -124,6 +297,7 @@ void SpinController::update()
             motor_.stop();
             sub_phase_ = SpinSubPhase::COAST_DOWN;
             phase_start_ms_ = now;
+            sync_accel_damping_mode();
             return;
         }
 
@@ -132,6 +306,7 @@ void SpinController::update()
                 motor_.stop();
                 sub_phase_ = SpinSubPhase::DUTY_RUN_OFF;
                 phase_start_ms_ = now;
+                sync_accel_damping_mode();
             }
         }
         else {
@@ -139,6 +314,7 @@ void SpinController::update()
                 motor_.rotate_clockwise();
                 sub_phase_ = SpinSubPhase::DUTY_RUN_ON;
                 phase_start_ms_ = now;
+                sync_accel_damping_mode();
             }
         }
         break;
@@ -156,6 +332,7 @@ void SpinController::update()
             drain_pump_.turn_off();
             sub_phase_ = SpinSubPhase::PAUSED;
             is_paused_ = true;
+            sync_accel_damping_mode();
         }
         break;
 
@@ -174,18 +351,16 @@ void SpinController::update()
 
     case SpinSubPhase::RETRY_COASTING:
         if (elapsed_in_phase >= config_.coast_down_ms) {
-            // Drum reached full standstill (0 RPM). Reset monitor and restart progressive ramp from Sprint 1
             if (vibration_monitor_ != nullptr) {
                 vibration_monitor_->reset();
             }
-            current_sprint_idx_ = 0;
-            if (config_.sprints && total_sprints_ > 0) {
-                current_sprint_on_ms_ = config_.sprints[0].on_ms;
-                current_sprint_off_ms_ = config_.sprints[0].off_ms;
-            }
+            sensor_bad_ = false;
+            sensor_bad_since_ms_ = 0;
+            accel_timeline_.reset();
             sub_phase_ = SpinSubPhase::CLUTCH_ENGAGE;
-            resume_target_phase_ = SpinSubPhase::SPRINT_ON;
+            resume_target_phase_ = SpinSubPhase::ACCEL;
             phase_start_ms_ = now;
+            sync_accel_damping_mode();
         }
         break;
 
@@ -215,19 +390,22 @@ void SpinController::pause()
     uint32_t now = timer_hal_.get_time_ms();
 
     if (sub_phase_ == SpinSubPhase::CLUTCH_ENGAGE) {
-        // Motor hasn't rotated yet, pump can turn off safely
         drain_pump_.turn_off();
         sub_phase_ = SpinSubPhase::PAUSED;
         is_paused_ = true;
+        sync_accel_damping_mode();
         return;
     }
 
     if (sub_phase_ == SpinSubPhase::DUTY_RUN_ON || sub_phase_ == SpinSubPhase::DUTY_RUN_OFF) {
         duty_run_elapsed_before_pause_ms_ += (now - duty_run_start_ms_);
+        duty_run_start_ms_ = now;
     }
 
-    // Cut motor immediately, but keep pump on for coast-down to protect transmission
     motor_.stop();
+    if (sub_phase_ == SpinSubPhase::ACCEL) {
+        accel_timeline_.on_motor_off(now);
+    }
     sub_phase_ = SpinSubPhase::PAUSE_COASTING;
     phase_start_ms_ = now;
 }
@@ -242,20 +420,15 @@ void SpinController::resume()
     drain_pump_.turn_on();
     is_paused_ = false;
 
-    // Reset vibration monitor on resume from standstill
     if (vibration_monitor_ != nullptr) {
         vibration_monitor_->reset();
     }
+    sensor_bad_ = false;
+    sensor_bad_since_ms_ = 0;
 
-    // Always restart progressive sprints from Sprint 1 to ensure smooth acceleration
-    current_sprint_idx_ = 0;
-    if (config_.sprints && total_sprints_ > 0) {
-        current_sprint_on_ms_ = config_.sprints[0].on_ms;
-        current_sprint_off_ms_ = config_.sprints[0].off_ms;
-    }
-    resume_target_phase_ = SpinSubPhase::SPRINT_ON;
+    accel_timeline_.reset();
+    resume_target_phase_ = SpinSubPhase::ACCEL;
 
-    // Re-engage clutch before spinning motor again
     sub_phase_ = SpinSubPhase::CLUTCH_ENGAGE;
     phase_start_ms_ = now;
 }
@@ -275,16 +448,26 @@ void SpinController::stop()
         return;
     }
 
-    // Soft stop with coast-down protection
+    uint32_t now = timer_hal_.get_time_ms();
     motor_.stop();
+    if (sub_phase_ == SpinSubPhase::ACCEL) {
+        accel_timeline_.on_motor_off(now);
+    }
+    if (sub_phase_ == SpinSubPhase::DUTY_RUN_ON) {
+        duty_run_elapsed_before_pause_ms_ += (now - duty_run_start_ms_);
+        duty_run_start_ms_ = now;
+    }
     sub_phase_ = SpinSubPhase::STOP_COASTING;
-    phase_start_ms_ = timer_hal_.get_time_ms();
+    phase_start_ms_ = now;
 }
 
 void SpinController::emergency_stop()
 {
     motor_.stop();
     drain_pump_.turn_off();
+    accel_timeline_.reset();
+    sensor_bad_ = false;
+    sensor_bad_since_ms_ = 0;
     sub_phase_ = SpinSubPhase::IDLE;
     is_active_ = false;
     is_paused_ = false;
@@ -294,6 +477,8 @@ void SpinController::reset_error()
 {
     has_error_ = false;
     unbalance_retries_ = 0;
+    sensor_bad_ = false;
+    sensor_bad_since_ms_ = 0;
     if (vibration_monitor_ != nullptr) {
         vibration_monitor_->reset();
     }

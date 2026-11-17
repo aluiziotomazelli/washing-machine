@@ -27,8 +27,7 @@ PanelController::PanelController(
     , diag_ctrl_(diag_ctrl)
     , timer_hal_(timer_hal)
     , persistence_(persistence)
-{
-}
+{}
 
 bool PanelController::is_diagnostic_active() const
 {
@@ -67,24 +66,18 @@ void PanelController::update()
     btn_softener_.update();
     buzzer_.update();
 
-    // Check Diagnostic Mode entry trigger (Simultaneous hold of Program + Softener for >= 2.5s in IDLE)
-    if (diag_ctrl_ != nullptr && coordinator_.get_state() == domain::MachineState::IDLE && !diag_ctrl_->is_active()) {
-        if (btn_program_.is_pressed() && btn_softener_.is_pressed()) {
-            uint32_t now = timer_hal_ ? timer_hal_->get_time_ms() : 0;
-            if (diag_entry_press_start_ms_ == 0) {
-                diag_entry_press_start_ms_ = now;
-            }
-            else if (now - diag_entry_press_start_ms_ >= k_diag_trigger_hold_ms) {
-                diag_entry_press_start_ms_ = 0;
-                // Flush button click buffers before entering diagnostic
-                btn_program_.get_last_click();
-                btn_softener_.get_last_click();
-                btn_start_pause_.get_last_click();
-                diag_ctrl_->enter();
-            }
-        }
-        else {
-            diag_entry_press_start_ms_ = 0;
+    // Diagnostic Mode entry: Program + Softener held together for >= 2.5 s in IDLE.
+    if (diag_ctrl_ != nullptr && !diag_ctrl_->is_active()) {
+        const bool diag_hold_pressed = timer_hal_ != nullptr &&
+                                       coordinator_.get_state() == domain::MachineState::IDLE &&
+                                       btn_program_.is_pressed() && btn_softener_.is_pressed();
+
+        if (diag_hold_.update(diag_hold_pressed, diag_hold_pressed ? timer_hal_->get_time_ms() : 0)) {
+            // Flush button click buffers before entering diagnostic
+            btn_program_.get_last_click();
+            btn_softener_.get_last_click();
+            btn_start_pause_.get_last_click();
+            diag_ctrl_->enter();
         }
     }
 
@@ -102,13 +95,33 @@ void PanelController::update()
         return;
     }
 
+    // Start/Pause hold: stop and return to IDLE without waiting for release.
+    const domain::MachineState current_state = coordinator_.get_state();
+    const bool stop_hold_pressed =
+        timer_hal_ != nullptr &&
+        (current_state == domain::MachineState::RUNNING || current_state == domain::MachineState::PAUSED ||
+         current_state == domain::MachineState::ERROR) &&
+        btn_start_pause_.is_pressed();
+
+    if (stop_hold_.update(stop_hold_pressed, stop_hold_pressed ? timer_hal_->get_time_ms() : 0)) {
+        suppress_start_release_click_ = true;
+        btn_start_pause_.get_last_click();
+        coordinator_.stop_cycle();
+        buzzer_.play_pattern(BuzzerPattern::DOUBLE_BEEP);
+    }
+
     if (!buzzer_.is_playing()) {
         led_panel_.update();
     }
 
     ButtonClickType sp_click = btn_start_pause_.get_last_click();
     if (sp_click != ButtonClickType::NONE_CLICK) {
-        handle_start_pause_click(sp_click);
+        if (suppress_start_release_click_) {
+            suppress_start_release_click_ = false;
+        }
+        else {
+            handle_start_pause_click(sp_click);
+        }
     }
 
     ButtonClickType prog_click = btn_program_.get_last_click();
@@ -268,17 +281,16 @@ void PanelController::sync_state_with_coordinator()
             led_panel_.set_stage(domain::WashStage::IDLE);
             led_panel_.set_program(selected_program_);
         }
-        else if (current_state == domain::MachineState::RUNNING ||
-                 current_state == domain::MachineState::PAUSED) {
+        else if (current_state == domain::MachineState::RUNNING || current_state == domain::MachineState::PAUSED) {
             led_panel_.set_stage(current_stage);
         }
 
         prev_state_ = current_state;
         prev_stage_ = current_stage;
     }
-    else if ((current_state == domain::MachineState::RUNNING ||
-              current_state == domain::MachineState::PAUSED) &&
-             prev_stage_ != current_stage) {
+    else if (
+        (current_state == domain::MachineState::RUNNING || current_state == domain::MachineState::PAUSED) &&
+        prev_stage_ != current_stage) {
         led_panel_.set_stage(current_stage);
         prev_stage_ = current_stage;
     }

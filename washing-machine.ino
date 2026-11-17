@@ -84,7 +84,7 @@ static controllers::SpinController spin_ctrl(timer_hal, drain_pump, motor, contr
 static fsm::WashCycleCoordinator
     coordinator(timer_hal, fill_ctrl, agitator, drain_ctrl, spin_ctrl, fsm::CoordinatorConfig{}, &persistence_mgr);
 
-// Diagnostic Controller:
+// Field Service Diagnostic Controller:
 static ui::DiagnosticController diag_ctrl(
     btn_start,
     btn_program,
@@ -113,7 +113,7 @@ static ui::PanelController panel_ctrl(
 
 void setup()
 {
-    // Check if recovery from hardware watchdog reset occurred
+    // Detect Watchdog reset before flag is cleared by bootloader sequences
     bool recovered_from_wdt = watchdog_hal.was_reset_by_watchdog();
 
     // Initialize Hardware Peripherals
@@ -167,10 +167,16 @@ void loop()
     water_level_sensor.update();
     motor.update();
 
-    // Process & UI coordination
-    if (!diag_ctrl.is_active()) {
-        coordinator.update();
+    // Periodic vibration sampling (50 Hz / 20 ms)
+    static uint32_t last_vibration_sample_ms = 0;
+    uint32_t now = timer_hal.get_time_ms();
+    if (now - last_vibration_sample_ms >= 20) {
+        last_vibration_sample_ms = now;
+        vib_monitor.update();
     }
+
+    // Process & UI coordination
+    coordinator.update();
     panel_ctrl.update();
 
     // Pet / kick hardware watchdog to prevent timeout reset
