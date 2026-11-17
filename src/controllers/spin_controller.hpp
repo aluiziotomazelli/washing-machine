@@ -42,7 +42,7 @@ struct SpinConfig
     uint32_t coast_down_ms{18000};            //!< Drum coast-down time before releasing the pump/brake.
     uint32_t accel_motor_on_ms{7000};         //!< Accumulated motor-on time target for ACCEL (7 s).
     uint32_t accel_max_wall_ms{40000};        //!< Maximum wall-clock cap for ACCEL phase.
-    uint32_t damping_min_off_ms{800};         //!< Minimum motor-off time before damping can resume.
+    uint32_t damping_min_off_ms{2500};        //!< Minimum motor-off time before damping can resume.
     uint32_t damping_max_off_ms{8000};        //!< Maximum damping duration before escalation.
     uint32_t damping_sensor_timeout_ms{1000}; //!< Sensor-failure duration before escalation.
     uint8_t max_unbalance_retries{2};         //!< Dry redistribution retries before latching an error.

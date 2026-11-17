@@ -45,7 +45,7 @@ public:
 
     /**
      * @brief Whether critical unbalance trip condition was reached.
-     * @return true if vibration exceeded sustained limit (> 1s) or immediate shock threshold.
+     * @return true if vibration exceeded the sustained limit (800 ms default) or immediate shock threshold.
      */
     virtual bool is_critical_unbalance() const = 0;
 

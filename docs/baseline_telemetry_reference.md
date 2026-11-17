@@ -8,6 +8,8 @@
 - `logs/test11_finetuned_sprint_unbalanced_heavy_blanket.csv`
 - `logs/balance-ring/test_07_almost-balanced-load_plus250ml.csv`
 
+> **Historical baseline:** These captures predate the current tuning and were analyzed with the original 5500/4000 LSB proposal. Current production defaults are `accel_warning_threshold=3500`, `accel_warning_clear=2000`, `damping_min_off_ms=2500`, and `sustained_trip_duration_ms=800`; see `docs/accel_vibe_damping_refactor_plan.md`.
+
 ---
 
 ## 1. Summary Metrics
@@ -39,10 +41,10 @@
 
 ---
 
-## 3. Regression Acceptance Criteria
+## 3. Regression Acceptance Criteria (current tuning)
 
 When validating the refactored implementation against hardware or replayed data:
-1. **Empty tub:** Must complete ACCEL without entering `VIBE_DAMPING`. Max peak must remain < 4,000 LSB.
-2. **Balanced load:** Must complete ACCEL without entering `VIBE_DAMPING`. Max peak must remain < 4,000 LSB.
-3. **Light unbalance:** Must cross the 200–380 RPM band smoothly. Any damping pause, if triggered, must recover within `damping_min_off_ms` (800 ms) and not escalate.
-4. **Heavy unbalance:** Must engage `VIBE_DAMPING` at warning threshold (5,500 LSB) and mitigate amplitude, preventing unmitigated escalation to the 11,000 LSB trip threshold during acceleration.
+1. **Empty tub:** Must complete ACCEL. The historical peak (3,729 LSB) can cross the current 3,500 LSB warning threshold; any damping pause must recover without escalation.
+2. **Balanced load:** Must complete ACCEL. The historical peak (3,884 LSB) can cross the current 3,500 LSB warning threshold; any damping pause must recover without escalation.
+3. **Light unbalance:** Must cross the 200–380 RPM band smoothly. Any damping pause, if triggered, must recover within `damping_min_off_ms` (2500 ms) and not escalate.
+4. **Heavy unbalance:** Must engage `VIBE_DAMPING` at the current warning threshold (3,500 LSB) and mitigate amplitude, preventing unmitigated escalation to the 11,000 LSB trip threshold during acceleration.

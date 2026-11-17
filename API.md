@@ -232,11 +232,13 @@ Calibration parameters for vibration detection based on empirical load tests.
 | :--- | :--- | :--- |
 | `sample_period_ms` | `uint16_t` | Acquisition period (20 ms = 50 Hz). |
 | `window_samples` | `uint8_t` | Samples per peak-to-peak window (10 = 200 ms). |
-| `motion_threshold` | `uint16_t` | Minimum envelope to report physical movement. |
-| `warning_threshold` | `uint16_t` | Envelope that flags perceptible unbalance. |
+| `motion_threshold` | `uint16_t` | Minimum envelope to report physical movement. Not consumed by production spin logic; kept for tests/API compatibility. |
+| `accel_warning_threshold` | `uint16_t` | Envelope that flags unbalance during ACCEL (damping). |
 | `trip_threshold` | `uint16_t` | Sustained envelope that triggers a trip. |
 | `shock_threshold` | `uint16_t` | Single-sample envelope that triggers an immediate trip. |
-| `sustained_trip_duration_ms` | `uint16_t` | Time above trip_threshold before latching a trip. |
+| `sustained_trip_duration_ms` | `uint16_t` | Time above trip_threshold before latching a trip (800 ms default). |
+| `accel_warning_clear` | `uint16_t` | Hysteresis clear during ACCEL (2000 LSB default). |
+| `warning_debounce_ms` | `uint16_t` | Debounce before latch (0 = first 200 ms window). |
 
 ### `SpinSubPhase`
 
@@ -3060,7 +3062,7 @@ bool is_critical_unbalance() const;
 
 **Returns:**
 
-* `true if vibration exceeded sustained limit (> 1s) or immediate shock threshold.`
+* `true if vibration exceeded the sustained limit (800 ms default) or immediate shock threshold.`
 
 ---
 
@@ -4072,7 +4074,7 @@ bool is_critical_unbalance() const override;
 
 **Returns:**
 
-* `true if vibration exceeded sustained limit (> 1s) or immediate shock threshold.`
+* `true if vibration exceeded the sustained limit (800 ms default) or immediate shock threshold.`
 
 ---
 

@@ -458,6 +458,38 @@ TEST_F(SpinControllerTest, VibeDampingContinuesSamplingMonitorAndResumesToAccel)
     EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::ACCEL);
 }
 
+TEST_F(SpinControllerTest, ProductionDefaultDampingMinOffDelaysResume)
+{
+    mocks::MockVibrationMonitor mock_vib;
+    controllers::SpinConfig defaults{};
+    const uint32_t min_off_ms = defaults.damping_min_off_ms;
+    ASSERT_GT(min_off_ms, 100u);
+    controllers::SpinController spin_with_vib{mock_timer, mock_drain_pump, mock_motor, defaults, &mock_vib};
+
+    ON_CALL(mock_vib, is_sensor_ok()).WillByDefault(Return(true));
+    ON_CALL(mock_vib, is_critical_unbalance()).WillByDefault(Return(false));
+    ON_CALL(mock_vib, is_warning()).WillByDefault(Return(false));
+
+    spin_with_vib.start(domain::WaterLevel::LOW_LEVEL, 60);
+    simulated_time_ms += 5000;
+    spin_with_vib.update(); // CLUTCH -> ACCEL
+    ASSERT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::ACCEL);
+
+    ON_CALL(mock_vib, is_warning()).WillByDefault(Return(true));
+    simulated_time_ms += 20;
+    spin_with_vib.update();
+    ASSERT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::VIBE_DAMPING);
+
+    ON_CALL(mock_vib, is_warning()).WillByDefault(Return(false));
+    simulated_time_ms += min_off_ms - 100; // just before production min-off
+    spin_with_vib.update();
+    EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::VIBE_DAMPING);
+
+    simulated_time_ms += 100;
+    spin_with_vib.update();
+    EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::ACCEL);
+}
+
 TEST_F(SpinControllerTest, WarningDuringDutyRunOnDoesNotEnterVibeDamping)
 {
     mocks::MockVibrationMonitor mock_vib;

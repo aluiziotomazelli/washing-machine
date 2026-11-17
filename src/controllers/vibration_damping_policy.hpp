@@ -36,7 +36,7 @@ struct DampingInput
  */
 struct DampingConfig
 {
-    uint32_t min_off_ms{800};         //!< Minimum resting pause before re-energizing motor
+    uint32_t min_off_ms{2500};        //!< Minimum resting pause before re-energizing motor
     uint32_t max_off_ms{8000};        //!< Maximum allowed resting pause before escalating
     uint32_t sensor_timeout_ms{1000}; //!< Continuous sensor failure before escalating
 };
