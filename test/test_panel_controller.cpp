@@ -76,6 +76,7 @@ protected:
         ON_CALL(btn_program, get_last_click()).WillByDefault(Return(ButtonClickType::NONE_CLICK));
         ON_CALL(btn_level, get_last_click()).WillByDefault(Return(ButtonClickType::NONE_CLICK));
         ON_CALL(btn_softener, get_last_click()).WillByDefault(Return(ButtonClickType::NONE_CLICK));
+        ON_CALL(btn_start, is_pressed()).WillByDefault(Return(false));
         ON_CALL(btn_program, is_pressed()).WillByDefault(Return(false));
         ON_CALL(btn_softener, is_pressed()).WillByDefault(Return(false));
     }
@@ -256,6 +257,85 @@ TEST_F(PanelControllerTest, StartPauseVeryLongClickStopsCycle)
     EXPECT_CALL(led_panel, set_stage(WashStage::IDLE)).Times(1);
     EXPECT_CALL(led_panel, set_program(WashProgram::RINSE_ONLY)).Times(1);
 
+    panel_ctrl.update();
+    EXPECT_EQ(coordinator.get_state(), MachineState::IDLE);
+}
+
+TEST_F(PanelControllerTest, HoldingStartPauseStopsCycleWithoutRelease)
+{
+    panel_ctrl.init();
+
+    // Start cycle via panel click
+    EXPECT_CALL(btn_start, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+    panel_ctrl.update();
+    ASSERT_EQ(coordinator.get_state(), MachineState::RUNNING);
+
+    ON_CALL(btn_start, is_pressed()).WillByDefault(Return(true));
+
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1000));
+    panel_ctrl.update();
+    EXPECT_EQ(coordinator.get_state(), MachineState::RUNNING);
+
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(2000));
+    panel_ctrl.update();
+    EXPECT_EQ(coordinator.get_state(), MachineState::RUNNING);
+
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(3600));
+    EXPECT_CALL(buzzer, play_pattern(BuzzerPattern::DOUBLE_BEEP)).Times(1);
+    EXPECT_CALL(led_panel, set_machine_state(MachineState::IDLE, MachineError::NONE)).Times(1);
+    EXPECT_CALL(led_panel, set_stage(WashStage::IDLE)).Times(1);
+    EXPECT_CALL(led_panel, set_program(WashProgram::RINSE_ONLY)).Times(1);
+
+    panel_ctrl.update();
+    EXPECT_EQ(coordinator.get_state(), MachineState::IDLE);
+}
+
+TEST_F(PanelControllerTest, StartHoldBelowThresholdKeepsCycleRunning)
+{
+    panel_ctrl.init();
+
+    EXPECT_CALL(btn_start, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+    panel_ctrl.update();
+    ASSERT_EQ(coordinator.get_state(), MachineState::RUNNING);
+
+    ON_CALL(btn_start, is_pressed()).WillByDefault(Return(true));
+
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1000));
+    panel_ctrl.update();
+
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(3000));
+    panel_ctrl.update();
+
+    EXPECT_EQ(coordinator.get_state(), MachineState::RUNNING);
+}
+
+TEST_F(PanelControllerTest, ReleaseClickAfterHoldStopDoesNotStartCycle)
+{
+    panel_ctrl.init();
+
+    EXPECT_CALL(btn_start, get_last_click())
+        .WillOnce(Return(ButtonClickType::CLICK))
+        .WillRepeatedly(Return(ButtonClickType::NONE_CLICK));
+    panel_ctrl.update();
+    ASSERT_EQ(coordinator.get_state(), MachineState::RUNNING);
+
+    ON_CALL(btn_start, is_pressed()).WillByDefault(Return(true));
+
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(1000));
+    panel_ctrl.update();
+
+    EXPECT_CALL(mock_timer, get_time_ms()).WillRepeatedly(Return(3600));
+    EXPECT_CALL(buzzer, play_pattern(BuzzerPattern::DOUBLE_BEEP)).Times(1);
+    panel_ctrl.update();
+    ASSERT_EQ(coordinator.get_state(), MachineState::IDLE);
+
+    // Release click must be swallowed once instead of starting a new cycle.
+    ON_CALL(btn_start, is_pressed()).WillByDefault(Return(false));
+    EXPECT_CALL(btn_start, get_last_click()).WillOnce(Return(ButtonClickType::CLICK));
     panel_ctrl.update();
     EXPECT_EQ(coordinator.get_state(), MachineState::IDLE);
 }
