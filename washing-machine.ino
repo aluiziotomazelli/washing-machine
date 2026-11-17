@@ -113,6 +113,9 @@ static ui::PanelController panel_ctrl(
 
 void setup()
 {
+    // TODO: remove after tests
+    Serial.begin(115200);
+
     // Check if recovery from hardware watchdog reset occurred
     bool recovered_from_wdt = watchdog_hal.was_reset_by_watchdog();
 
@@ -166,6 +169,24 @@ void loop()
     // Hardware sensor & driver periodic processing
     water_level_sensor.update();
     motor.update();
+
+    // TODO: remove after tests
+    // Periodic vibration sampling & telemetry stream (50 Hz / 20 ms)
+    static uint32_t last_telemetry_ms = 0;
+    uint32_t now = timer_hal.get_time_ms();
+    if (now - last_telemetry_ms >= 20) {
+        last_telemetry_ms = now;
+        vib_monitor.update();
+        const hal::Vector3& sample = vib_monitor.get_last_sample();
+        Serial.print(F("X:"));
+        Serial.print(sample.x);
+        Serial.print(F(" Y:"));
+        Serial.print(sample.y);
+        Serial.print(F(" Z:"));
+        Serial.print(sample.z);
+        Serial.print(F(" Vib:"));
+        Serial.println(vib_monitor.get_vibration());
+    }
 
     // Process & UI coordination
     if (!diag_ctrl.is_active()) {
