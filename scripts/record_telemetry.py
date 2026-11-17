@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Record vibration telemetry (vib + spin subphase + flags) from Arduino to CSV.
+Record lean vibration telemetry (vib + spin subphase) from Arduino to CSV.
 Designed for washing machine spin vibration and damping analysis.
 """
 
@@ -15,12 +15,12 @@ DEFAULT_PORT = "/dev/ttyUSB1"
 if os.path.exists("/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A9M9DV3R-if00-port0"):
     DEFAULT_PORT = os.path.realpath("/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_A9M9DV3R-if00-port0")
 
-# vib,subphase,warning,critical,sensor_ok,retries
-PATTERN = re.compile(r"^\s*(-?\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*$")
+# vib,subphase
+PATTERN = re.compile(r"^\s*(-?\d+)\s*,\s*(\d+)\s*$")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Record vib/subphase/flags telemetry to a CSV file.")
+    parser = argparse.ArgumentParser(description="Record vib/subphase telemetry to a CSV file.")
     parser.add_argument("-p", "--port", default=DEFAULT_PORT, help=f"Serial port (default: {DEFAULT_PORT})")
     parser.add_argument("-b", "--baud", type=int, default=115200, help="Baud rate (default: 115200)")
     parser.add_argument("-d", "--duration", type=float, default=60.0, help="Recording duration in seconds (default: 60s)")
@@ -33,7 +33,7 @@ def main():
         args.output = f"logs/spin_{timestamp_str}.csv"
 
     print("=" * 70)
-    print(" WASHING MACHINE: TELEMETRY RECORDER (VIB + SUBPHASE + FLAGS)")
+    print(" WASHING MACHINE: TELEMETRY RECORDER (VIB + SUBPHASE)")
     print("=" * 70)
     print(f"Serial port : {args.port}")
     print(f"Baud rate   : {args.baud}")
@@ -67,7 +67,7 @@ def main():
 
     try:
         with open(args.output, "w", encoding="utf-8") as f:
-            f.write("elapsed_ms,elapsed_s,vib,subphase,warning,critical,sensor_ok,retries\n")
+            f.write("elapsed_ms,elapsed_s,vib,subphase\n")
 
             while True:
                 try:
@@ -98,12 +98,8 @@ def main():
 
                 vib = int(match.group(1))
                 subphase = int(match.group(2))
-                warning = int(match.group(3))
-                critical = int(match.group(4))
-                sensor_ok = int(match.group(5))
-                retries = int(match.group(6))
 
-                f.write(f"{elapsed_ms},{elapsed_s:.3f},{vib},{subphase},{warning},{critical},{sensor_ok},{retries}\n")
+                f.write(f"{elapsed_ms},{elapsed_s:.3f},{vib},{subphase}\n")
                 samples.append(vib)
 
                 if vib > max_vib:
@@ -119,8 +115,7 @@ def main():
 
                 sys.stdout.write(
                     f"\r[{bar}] {elapsed_s:4.1f}s / {args.duration:4.1f}s | "
-                    f"Samples: {len(samples):4d} | Vib: {vib:5d} | Ph: {subphase:2d} "
-                    f"W:{warning} C:{critical} S:{sensor_ok} R:{retries}"
+                    f"Samples: {len(samples):4d} | Vib: {vib:5d} | Ph: {subphase:2d}"
                 )
                 sys.stdout.flush()
 

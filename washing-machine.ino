@@ -161,15 +161,7 @@ void loop()
         vib_monitor.update();
         Serial.print(vib_monitor.get_vibration());
         Serial.print(',');
-        Serial.print(static_cast<uint8_t>(spin_ctrl.get_sub_phase()));
-        Serial.print(',');
-        Serial.print(vib_monitor.is_warning() ? 1 : 0);
-        Serial.print(',');
-        Serial.print(vib_monitor.is_critical_unbalance() ? 1 : 0);
-        Serial.print(',');
-        Serial.print(vib_monitor.is_sensor_ok() ? 1 : 0);
-        Serial.print(',');
-        Serial.println(spin_ctrl.get_unbalance_retries());
+        Serial.println(static_cast<uint8_t>(spin_ctrl.get_sub_phase()));
     }
 
     // Process & UI coordination

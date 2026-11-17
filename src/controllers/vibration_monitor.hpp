@@ -16,12 +16,12 @@ struct VibrationConfig
     uint16_t sample_period_ms{20};             //!< Acquisition period (20 ms = 50 Hz).
     uint8_t window_samples{10};                //!< Samples per peak-to-peak window (10 = 200 ms).
     uint16_t motion_threshold{400};            //!< Minimum envelope to report physical movement.
-    uint16_t warning_threshold{10000};         //!< Envelope that flags perceptible unbalance.
+    uint16_t accel_warning_threshold{6500};    //!< Envelope that flags unbalance during ACCEL (damping).
     uint16_t trip_threshold{11000};            //!< Sustained envelope that triggers a trip.
     uint16_t shock_threshold{14000};           //!< Single-sample envelope that triggers an immediate trip.
     uint16_t sustained_trip_duration_ms{1000}; //!< Time above trip_threshold before latching a trip.
-    uint16_t warning_clear{7273};              //!< Envelope below which warning clears (proportional to warning).
-    uint16_t warning_debounce_ms{200};         //!< Debounce duration above threshold before warning latches.
+    uint16_t accel_warning_clear{4727};        //!< Hysteresis clear during ACCEL (proportional to warning).
+    uint16_t warning_debounce_ms{200};         //!< Debounce duration above accel warning before latch.
 };
 
 /**
@@ -63,6 +63,9 @@ public:
     /** @copydoc IVibrationMonitor::reset */
     void reset() override;
 
+    /** @copydoc IVibrationMonitor::set_accel_damping_mode */
+    void set_accel_damping_mode(bool enabled) override;
+
     /**
      * @brief Enable or disable sample acquisition (disabled monitor keeps last state).
      * @param enabled true to resume sampling.
@@ -97,6 +100,7 @@ private:
 
     bool is_config_valid_{true};
     bool is_enabled_{true};
+    bool accel_damping_mode_{false};
     uint32_t last_sample_ms_{0};
 
     // Current window min/max tracking

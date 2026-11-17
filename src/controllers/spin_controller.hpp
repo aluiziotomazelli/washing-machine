@@ -168,6 +168,7 @@ private:
     DampingInput make_damping_input(uint32_t now) const;
     void update_sensor_bad_tracking(uint32_t now);
     uint32_t sensor_bad_duration_ms(uint32_t now) const;
+    void sync_accel_damping_mode();
 
     hal::ITimerHAL& timer_hal_;
     hal::IDigitalOutput& drain_pump_;

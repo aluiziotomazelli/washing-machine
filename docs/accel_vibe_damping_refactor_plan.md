@@ -1,4 +1,4 @@
-# Refactor Plan: Sensor-Driven ACCEL Spin with Adaptive Vibration Damping
+#Refactor Plan : Sensor - Driven ACCEL Spin with Adaptive Vibration Damping
 
 ## 1. Status and Decision
 
@@ -121,8 +121,8 @@ DUTY_RUN_ON/OFF -- duration reached --> COAST_DOWN
 | `VibrationDampingPolicy` | `src/controllers/vibration_damping_policy.hpp/.cpp` | Pure decision logic: run, pause, resume, or escalate |
 | `AccelTimeline` | `src/controllers/accel_timeline.hpp/.cpp` | Accumulate motor-on time and enforce the wall-clock safety cap for `ACCEL` |
 | `SpinController` | `src/controllers/spin_controller.hpp/.cpp` | Orchestrate clutch, ACCEL, damping, duty run, coast-down, pause, stop, and retry |
-| `MockVibrationMonitor` | `test/mocks/mock_vibration_monitor.hpp` | Existing mock; extend tests as needed |
-| `WashCycleCoordinator` | `src/fsm/wash_cycle_coordinator.hpp/.cpp` | Unchanged API; retry and recovery defaults updated |
+| `MockVibrationMonitor` | `test/mocks/mock_vibration_monitor.hpp` | Existing mock;
+extend tests as needed | | `WashCycleCoordinator` | `src / fsm / wash_cycle_coordinator.hpp /.cpp` | Unchanged API; retry and recovery defaults updated |
 
 ### 4.3 Dependency rules
 
@@ -138,72 +138,66 @@ DUTY_RUN_ON/OFF -- duration reached --> COAST_DOWN
 classDiagram
     direction TB
 
-    class SpinController {
-        +start(WaterLevel, uint32_t)
-        +update()
-        +pause()
-        +resume()
-        +stop()
-        +emergency_stop()
-        +reset_error()
-    }
+    class SpinController
+{
+    + start(WaterLevel, uint32_t) + update() + pause() + resume() + stop() + emergency_stop() + reset_error()
+}
 
-    class VibrationDampingPolicy {
-        +evaluate(DampingInput, bool motor_on, bool damping_active) DampingAction
-        +can_resume(DampingInput, uint32_t damping_elapsed_ms) bool
-    }
+class VibrationDampingPolicy
+{
+    + evaluate(DampingInput, bool motor_on, bool damping_active)DampingAction
+        + can_resume(DampingInput, uint32_t damping_elapsed_ms)bool
+}
 
-    class AccelTimeline {
-        +start(uint32_t now_ms)
-        +on_motor_on(uint32_t now_ms)
-        +on_motor_off(uint32_t now_ms)
-        +is_complete(uint32_t now_ms) bool
-        +motor_on_elapsed_ms() uint32_t
-    }
+class AccelTimeline
+{
+    + start(uint32_t now_ms) +
+        on_motor_on(uint32_t now_ms) + on_motor_off(uint32_t now_ms) + is_complete(uint32_t now_ms)bool +
+        motor_on_elapsed_ms()uint32_t
+}
 
-    class IVibrationMonitor {
-        <<interface>>
-        +update()
-        +is_warning() bool
-        +is_critical_unbalance() bool
-        +is_sensor_ok() bool
-        +reset()
-    }
+class IVibrationMonitor
+{
+    << interface >> +update() + is_warning() bool + is_critical_unbalance() bool + is_sensor_ok() bool + reset()
+}
 
-    class VibrationMonitor {
-        +update()
-        +is_warning() bool
-        +is_critical_unbalance() bool
-        +is_sensor_ok() bool
-    }
+class VibrationMonitor
+{
+    + update() + is_warning()bool + is_critical_unbalance()bool + is_sensor_ok()bool
+}
 
-    class ITimerHAL { <<interface>> }
-    class IReversibleMotor { <<interface>> }
-    class IDigitalOutput { <<interface>> }
-    class IAccelerometer { <<interface>> }
+class ITimerHAL
+{
+    << interface >>
+} class IReversibleMotor
+{
+    << interface >>
+} class IDigitalOutput
+{
+    << interface >>
+} class IAccelerometer
+{
+    << interface >>
+}
 
-    SpinController --> IVibrationMonitor
-    SpinController --> ITimerHAL
-    SpinController --> IReversibleMotor
-    SpinController --> IDigitalOutput
-    SpinController --> VibrationDampingPolicy
-    SpinController --> AccelTimeline
+        SpinController-- > IVibrationMonitor SpinController-- > ITimerHAL SpinController-- >
+        IReversibleMotor SpinController-- > IDigitalOutput SpinController-- > VibrationDampingPolicy SpinController-- >
+        AccelTimeline
 
-    VibrationMonitor ..|> IVibrationMonitor
-    VibrationMonitor --> IAccelerometer
-    VibrationMonitor --> ITimerHAL
+            VibrationMonitor..|
+    > IVibrationMonitor VibrationMonitor-- > IAccelerometer VibrationMonitor-- >
+        ITimerHAL
 ```
 
----
+        -- -
 
-## 5. Configuration Changes
+        ##5. Configuration Changes
 
-### 5.1 `SpinConfig`
+        ## #5.1 `SpinConfig`
 
-Replace sprint fields with ACCEL and damping parameters.
+        Replace sprint fields with ACCEL and damping parameters.
 
-```cpp
-struct SpinConfig
+```cpp struct SpinConfig
 {
     uint32_t clutch_engage_ms{5000};
     uint32_t duty_on_ms{4000};
@@ -213,17 +207,25 @@ struct SpinConfig
     uint32_t accel_max_wall_ms{40000};
     uint32_t damping_min_off_ms{800};
     uint32_t damping_max_off_ms{8000};
-    uint8_t  max_unbalance_retries{2};
+    uint8_t max_unbalance_retries{2};
 };
 ```
 
-Parameter rationale:
+    Parameter rationale :
 
-| Parameter | Default | Rationale |
-|---|---:|---|
-| `clutch_engage_ms` | 5000 | Existing mechanical brake release delay; unchanged |
-| `duty_on_ms` | 4000 | Existing cruise pulse; unchanged |
-| `duty_off_ms` | 4000 | Existing cruise coast; unchanged |
+    |
+    Parameter |
+    Default |
+    Rationale |
+    |
+    -- -|
+    -- - : |
+           -- -|
+           | `clutch_engage_ms` |
+           5000 |
+           Existing mechanical brake release delay;
+unchanged | | `duty_on_ms` | 4000 | Existing cruise pulse;
+unchanged | | `duty_off_ms` | 4000 | Existing cruise coast; unchanged |
 | `coast_down_ms` | **18000** | 10 s is insufficient for a full stop from cruise speed; see section 7.3 |
 | `accel_motor_on_ms` | 20000 | Initial target for accumulated motor-on acceleration time; calibrate with real loads |
 | `accel_max_wall_ms` | 40000 | Safety cap so repeated damping cannot hold the cycle in ACCEL indefinitely |
@@ -240,23 +242,28 @@ Parameter rationale:
 Add hysteresis and warning debounce fields at the end of the struct so existing positional initializers remain source-compatible until they are explicitly updated.
 
 ```cpp
-struct VibrationConfig {
+struct VibrationConfig
+{
     uint16_t sample_period_ms{20};
-    uint8_t  window_samples{10};
+    uint8_t window_samples{10};
     uint16_t motion_threshold{400};
-    uint16_t warning_threshold{5500};
+    uint16_t accel_warning_threshold{6500};
     uint16_t trip_threshold{11000};
     uint16_t shock_threshold{14000};
     uint16_t sustained_trip_duration_ms{1000};
-    uint16_t warning_clear{4000};
+    uint16_t accel_warning_clear{4727};
     uint16_t warning_debounce_ms{200};
 };
 ```
 
-Threshold rationale:
+    Threshold rationale :
 
-- `warning_threshold` changes from 8500 to **5500 LSB** to give the controller time to react before the critical trip zone.
-- `warning_clear` is **4000 LSB**, not 3500. Existing logs show normal peaks around 3729–3884 LSB on empty or nearly balanced loads. A 3500 clear threshold is too close to normal operating peaks and can delay resumption unnecessarily.
+    - `accel_warning_threshold` set to* *
+    6500 LSB**(ACCEL - only damping context) to react before critical trip while tolerating duty
+    /
+    tampa vibration;
+trip / shock remain active in all phases.- `accel_warning_clear` is* * 4727 LSB**(proportional hysteresis).Warning
+                                               / damping is active only during ACCEL(and ACCEL - origin damping); trip and shock remain active during duty.
 - `warning_debounce_ms` prevents a single motor-switching transient window from triggering a damping pause. Critical shocks remain immediate through `shock_threshold`.
 - Both thresholds must be validated with real wash loads before being treated as final.
 
@@ -265,8 +272,8 @@ Threshold rationale:
 Enforce at runtime in the `VibrationMonitor` constructor or `init()`:
 
 ```text
-warning_clear < warning_threshold < trip_threshold
-motion_threshold < warning_threshold
+accel_warning_clear < accel_warning_threshold < trip_threshold
+motion_threshold < accel_warning_threshold
 warning_debounce_ms < sustained_trip_duration_ms
 damping_min_off_ms < damping_max_off_ms
 accel_motor_on_ms < accel_max_wall_ms
@@ -284,7 +291,8 @@ Replace the single-window warning assignment in `process_sample()` with latching
 
 ```cpp
 // Pseudocode inside process_sample(), after current_vib_ is computed.
-if (current_vib_ >= config_.warning_threshold) {
+if (current_vib_ >= config_.accel_warning_threshold)
+{
     if (warning_since_ms_ == 0) {
         warning_since_ms_ = now;
     }
@@ -292,38 +300,45 @@ if (current_vib_ >= config_.warning_threshold) {
         is_warning_ = true;
     }
 }
-else if (current_vib_ < config_.warning_clear) {
+else if (current_vib_ < config_.accel_warning_clear)
+{
     is_warning_ = false;
     warning_since_ms_ = 0;
 }
-else {
+else
+{
     // Hysteresis hold: keep the previous warning state.
 }
 ```
 
-Add a private member:
+    Add a private member :
 
-```cpp
-uint32_t warning_since_ms_{0};
+```cpp uint32_t warning_since_ms_{0};
 ```
 
 `reset()` must clear `warning_since_ms_` together with the existing flags.
 
-Behavior requirements:
+    Behavior requirements :
 
-- Warning remains latched between `warning_clear` and `warning_threshold`.
-- A new warning requires `warning_debounce_ms` of continuous above-threshold samples.
-- Critical shock still trips immediately on the first window above `shock_threshold`.
-- Sustained critical trip behavior is unchanged.
-- `is_warning()` remains a `const` method and the interface does not change.
+    -Warning remains latched between `accel_warning_clear` and `accel_warning_threshold` during ACCEL
+    - damping mode.-
+    A new warning
+        requires `warning_debounce_ms` of continuous above - threshold samples.-
+Critical shock still trips immediately
+on
+the first window above `shock_threshold`.- Sustained critical trip behavior is unchanged.- `is_warning()` remains
+a `const` method and the interface does
+not change
+.
 
-### 6.2 `VibrationDampingPolicy`
+## #6.2 `VibrationDampingPolicy`
 
-Create a pure class with no HAL dependencies.
+Create
+a pure class with
+no
+HAL dependencies.
 
-```cpp
-enum class DampingAction : uint8_t
-{
+```cpp enum class DampingAction : uint8_t {
     NONE = 0,
     PAUSE,
     RESUME,
@@ -350,48 +365,60 @@ class VibrationDampingPolicy
 public:
     explicit VibrationDampingPolicy(const DampingConfig& config = DampingConfig{});
 
-    DampingAction evaluate(
-        const DampingInput& input,
-        bool motor_energized,
-        bool damping_active) const;
+    DampingAction evaluate(const DampingInput& input, bool motor_energized, bool damping_active) const;
 
-    bool can_resume(
-        const DampingInput& input,
-        uint32_t damping_elapsed_ms) const;
+    bool can_resume(const DampingInput& input, uint32_t damping_elapsed_ms) const;
 
 private:
     DampingConfig config_;
 };
 ```
 
-Decision order in `evaluate()`:
+        Decision order in `evaluate()`:
 
-| Priority | Condition | Action |
-|---:|---|---|
-| 1 | `critical == true` | `ESCALATE` |
-| 2 | `sensor_ok == false` and sensor timeout exceeded | `ESCALATE` |
-| 3 | `warning == true` and `motor_energized == true` | `PAUSE` |
-| 4 | `damping_active == true` and `can_resume()` | `RESUME` |
-| 5 | `damping_active == true` and `max_off_ms` exceeded | `ESCALATE` |
-| 6 | Otherwise | `NONE` |
+    |
+    Priority
+    |
+    Condition
+    |
+    Action
+    |
+    |
+    -- - : |
+           -- -|
+           -- -|
+           |
+           1 | `critical == true` | `ESCALATE` |
+           |
+           2 | `sensor_ok == false` and sensor timeout exceeded
+           | `ESCALATE` |
+           |
+           3 | `warning == true` and `motor_energized == true` | `PAUSE` |
+           |
+           4 | `damping_active == true` and `can_resume()` | `RESUME` |
+           |
+           5 | `damping_active == true` and `max_off_ms` exceeded
+           | `ESCALATE` |
+           |
+           6 |
+           Otherwise
+           | `NONE` |
 
 `can_resume()`:
 
-```cpp
-return input.sensor_ok
-    && !input.warning
-    && !input.critical
-    && damping_elapsed_ms >= config_.min_off_ms;
+```cpp return input.sensor_ok
+    && !input.warning && !input.critical && damping_elapsed_ms >= config_.min_off_ms;
 ```
 
-The policy does not know about motor or pump pins. `SpinController` maps `PAUSE` to `motor_.stop()` and `RESUME` to `motor_.rotate_clockwise()`.
+    The policy does not know about motor or
+    pump pins. `SpinController` maps `PAUSE` to `motor_.stop()` and `RESUME` to `motor_.rotate_clockwise()`
+                                                                        .
 
-### 6.3 `AccelTimeline`
+                                                                    ## #6.3 `AccelTimeline`
 
-Create a pure timer helper.
+                                                                    Create a pure timer helper.
 
-```cpp
-class AccelTimeline
+```cpp class AccelTimeline
 {
 public:
     void start(uint32_t now_ms, uint32_t motor_on_target_ms, uint32_t wall_cap_ms);
@@ -410,38 +437,37 @@ private:
 };
 ```
 
-Rules:
+        Rules :
 
-- `motor_on_elapsed_ms_` accumulates only while the motor is commanded on.
-- `VIBE_DAMPING` time does not count toward `motor_on_elapsed_ms_`.
-- `is_complete()` returns true when either the motor-on target is reached or the wall-clock cap is exceeded.
-- The wall-clock cap prevents a heavy load with repeated damping pauses from remaining in ACCEL forever.
+    - `motor_on_elapsed_ms_` accumulates only while the motor is commanded
+        on.- `VIBE_DAMPING` time does not count toward `motor_on_elapsed_ms_`.- `is_complete()` returns true when either
+            the motor -
+        on target is reached or
+    the wall - clock cap is exceeded.- The wall -
+        clock cap prevents a heavy load with repeated damping pauses from remaining in ACCEL forever.
 
-### 6.4 `SpinController` state transitions
+        ## #6.4 `SpinController` state transitions
 
-New enum:
+            New enum :
 
-```cpp
-enum class SpinSubPhase : uint8_t
-{
-    IDLE = 0,
-    CLUTCH_ENGAGE,
-    ACCEL,
-    VIBE_DAMPING,
-    DUTY_RUN_ON,
-    DUTY_RUN_OFF,
-    COAST_DOWN,
-    PAUSE_COASTING,
-    PAUSED,
-    STOP_COASTING,
-    RETRY_COASTING
-};
+```cpp enum class SpinSubPhase : uint8_t {
+                IDLE = 0,
+                CLUTCH_ENGAGE,
+                ACCEL,
+                VIBE_DAMPING,
+                DUTY_RUN_ON,
+                DUTY_RUN_OFF,
+                COAST_DOWN,
+                PAUSE_COASTING,
+                PAUSED,
+                STOP_COASTING,
+                RETRY_COASTING
+            };
 ```
 
-New private members:
+    New private members :
 
-```cpp
-SpinSubPhase damping_return_phase_{SpinSubPhase::ACCEL};
+```cpp SpinSubPhase damping_return_phase_{SpinSubPhase::ACCEL};
 uint32_t damping_phase_elapsed_ms_{0};
 uint32_t damping_start_ms_{0};
 AccelTimeline accel_timeline_;
@@ -477,46 +503,38 @@ motor_.rotate_clockwise()
 
 `ACCEL` case:
 
-```text
-accel_timeline_.on_motor_on(now)
+```text accel_timeline_.on_motor_on(now)
 
-if (accel_timeline_.is_complete(now)) {
+    if (accel_timeline_.is_complete(now))
+{
     accel_timeline_.on_motor_off(now);
     transition_to_duty_run();
 }
 ```
 
-`VIBE_DAMPING` entry, only from motor-energized phases:
+`VIBE_DAMPING` entry, only from motor - energized phases :
 
-```text
-damping_return_phase_ = sub_phase_
-damping_phase_elapsed_ms_ = now - phase_start_ms_
-damping_start_ms_ = now
-motor_.stop()
-sub_phase_ = VIBE_DAMPING
+```text damping_return_phase_ = sub_phase_ damping_phase_elapsed_ms_ =
+                           now - phase_start_ms_ damping_start_ms_ = now motor_.stop() sub_phase_ = VIBE_DAMPING
 ```
 
-`VIBE_DAMPING` update:
+`VIBE_DAMPING` update :
 
-```text
-vibration_monitor_->update()
+```text vibration_monitor_->update()
 
-if (critical) {
-    enter_retry_or_stop(now)
-    return
+                               if (critical){enter_retry_or_stop(now) return }
+
+    DampingInput input
+{
+    sensor_ok, is_warning(), is_critical_unbalance(), now
 }
 
-DampingInput input{sensor_ok, is_warning(), is_critical_unbalance(), now}
-
 if (policy.evaluate(input, false, true) == DampingAction::ESCALATE) {
-    enter_retry_or_stop(now)
-    return
+    enter_retry_or_stop(now) return
 }
 
 if (policy.can_resume(input, now - damping_start_ms_)) {
-    sub_phase_ = damping_return_phase_
-    phase_start_ms_ = now - damping_phase_elapsed_ms_
-    motor_.rotate_clockwise()
+    sub_phase_ = damping_return_phase_ phase_start_ms_ = now - damping_phase_elapsed_ms_ motor_.rotate_clockwise()
 }
 ```
 
@@ -598,9 +616,7 @@ if (vibration_monitor_ != nullptr && monitor_active) {
         return;
     }
 
-    bool motor_energized =
-        sub_phase_ == SpinSubPhase::ACCEL ||
-        sub_phase_ == SpinSubPhase::DUTY_RUN_ON;
+    bool motor_energized = sub_phase_ == SpinSubPhase::ACCEL || sub_phase_ == SpinSubPhase::DUTY_RUN_ON;
 
     if (motor_energized && vibration_monitor_->is_warning()) {
         enter_vibe_damping(now);
@@ -609,7 +625,7 @@ if (vibration_monitor_ != nullptr && monitor_active) {
 }
 ```
 
-This fixes the deadlock: `is_warning_` is latching, so `VIBE_DAMPING` must continue calling `update()` until a new window below `warning_clear` clears it.
+This fixes the deadlock: `is_warning_` is latching in ACCEL-damping mode, so `VIBE_DAMPING` must continue calling `update()` until a new window below `accel_warning_clear` clears it.
 
 ### 6.6 Sensor failure fail-safe
 
@@ -622,25 +638,40 @@ Recommended behavior:
 - If the sensor recovers before the timeout, clear the failure timer and continue.
 - Do not wait forever in `VIBE_DAMPING` when the sensor has failed.
 
-This is a safety improvement and a liveness guarantee. If a shorter or longer timeout is preferred, make it configurable; do not hard-code it in the state machine.
+This is a safety improvement and a liveness guarantee. If a shorter or longer timeout is preferred, make it configurable;
+do {
+not hard - code it in the state machine.
 
----
+               -- -
 
-## 7. Retry and Recovery Tuning
+               ##7. Retry and Recovery Tuning
 
-### `SpinController::max_unbalance_retries` — dry redistribution retries
+               ## # `SpinController::max_unbalance_retries` — dry redistribution retries
 
-**Location:** `src/controllers/spin_controller.hpp` L61  
-**Current default:** `1`  
-**Proposed default:** `2`–`3`
+                   ** Location
+    : ** `src / controllers /
+               spin_controller
+                   .hpp` L61** Current default : ** `1` ** Proposed default
+    : ** `2`–`3`
 
-This controls how many times `SpinController` executes a full `RETRY_COASTING` cycle before latching `has_error_`. Each retry stops the motor, coasts to standstill, resets the vibration monitor, and restarts from the acceleration phase.
+      This controls how many times `SpinController` executes a full `RETRY_COASTING` cycle before
+          latching `has_error_`.Each retry stops the motor,
+    coasts to standstill, resets the vibration monitor,
+    and restarts from the acceleration phase.
 
-With `VIBE_DAMPING` acting as the first-line response to imbalance, the cases that escalate to `RETRY_COASTING` should be genuinely severe. Giving the system two or three dry retries before a hydraulic recovery is a reasonable increase in resilience. Each retry costs one `coast_down_ms` window plus the acceleration ramp. With `coast_down_ms` increased to 18 s, the worst-case time increases, so start with **2** and evaluate **3** only after real-load testing.
+        With `VIBE_DAMPING` acting as the first -
+        line response to imbalance,
+    the cases that escalate to `RETRY_COASTING` should be genuinely severe.Giving the system two or
+        three dry retries before a hydraulic recovery is a reasonable increase in
+            resilience.Each retry costs one `coast_down_ms` window plus the acceleration
+                ramp.With `coast_down_ms` increased to 18 s,
+    the worst - case time increases,
+    so start with* * 2 * *and evaluate* * 3 * *only after real -
+        load testing.
 
-### `WashCycleCoordinator::unbalance_agitate_sec` — hydraulic recovery agitation time
+        ## # `WashCycleCoordinator::unbalance_agitate_sec` — hydraulic recovery agitation time
 
-**Location:** `src/fsm/wash_cycle_coordinator.hpp` L72  
+            ** Location:** `src/fsm/wash_cycle_coordinator.hpp` L72  
 **Current default:** `30 s`  
 **Proposed value:** `120 s`
 
@@ -668,14 +699,14 @@ The longer window adds up to 8 s per coast event. Combined with additional dry r
 ### Escalation hierarchy
 
 ```text
-Vib < warning_clear
+Vib < accel_warning_clear (ACCEL mode)
     Normal run. Motor ON. No action.
 
-warning_clear <= Vib < warning_threshold
+accel_warning_clear <= Vib < accel_warning_threshold (ACCEL mode)
     Hysteresis hold. No change to motor.
 
-Vib >= warning_threshold and motor energized
-    VIBE_DAMPING. Motor OFF. Resume when Vib < warning_clear
+Vib >= accel_warning_threshold and motor energized in ACCEL
+    VIBE_DAMPING. Motor OFF. Resume when Vib < accel_warning_clear (ACCEL mode)
     and damping_min_off_ms has elapsed.
 
 Vib >= trip_threshold sustained, or >= shock_threshold
@@ -683,33 +714,39 @@ Vib >= trip_threshold sustained, or >= shock_threshold
     Consumes one max_unbalance_retries slot.
 
 Retries exhausted
-    Hydraulic recovery: refill, agitate 120 s, drain, retry spin.
-    Consumes one max_unbalance_recoveries slot.
+    Hydraulic recovery:
+    refill, agitate 120 s, drain,
+        retry spin.Consumes one max_unbalance_recoveries
+                slot.
 
-Recoveries exhausted
-    Error latched. Cycle aborted.
+            Recoveries exhausted Error latched.Cycle aborted.
 ```
 
----
+            -- -
 
-## 8. Files to Change
+            ##8. Files to Change
 
-| File | Change |
-|---|---|
-| `src/controllers/vibration_monitor.hpp` | Add `warning_clear`, `warning_debounce_ms`, `warning_since_ms_`, constructor validation |
-| `src/controllers/vibration_monitor.cpp` | Implement hysteretic warning set/clear and debounce |
-| `src/controllers/interfaces/i_vibration_monitor.hpp` | No interface change |
-| `src/controllers/vibration_damping_policy.hpp` | New pure policy class |
-| `src/controllers/vibration_damping_policy.cpp` | New decision logic |
-| `src/controllers/accel_timeline.hpp` | New pure ACCEL timer |
-| `src/controllers/accel_timeline.cpp` | New motor-on accumulator and wall cap |
-| `src/controllers/spin_controller.hpp` | Remove sprint types and fields; add `ACCEL`, `VIBE_DAMPING`, damping fields, `AccelTimeline`; update `SpinConfig` |
-| `src/controllers/spin_controller.cpp` | Remove sprint state machine; implement ACCEL, damping, monitor update, timing accounting, fail-safes |
-| `src/fsm/wash_cycle_coordinator.hpp` | Change `unbalance_agitate_sec` default to 120 s |
-| `test/test_vibration_monitor.cpp` | Add hysteresis, debounce, invalid-config, sensor-health tests |
-| `test/test_vibration_damping_policy.cpp` | New decision-table tests |
-| `test/test_accel_timeline.cpp` | New timer tests |
-| `test/test_spin_controller.cpp` | Replace sprint tests with ACCEL/damping tests; update `SpinConfig` initializers |
+            | File | Change | | -- -| -- -| | `src / controllers / vibration_monitor.hpp` |
+            Add `accel_warning_clear / threshold`,
+        ACCEL - damping mode, `warning_debounce_ms`, `warning_since_ms_`,
+        constructor validation | | `src / controllers / vibration_monitor.cpp` |
+            Implement hysteretic warning set / clear and debounce |
+            | `src / controllers / interfaces / i_vibration_monitor.hpp` | No interface change |
+            | `src / controllers / vibration_damping_policy.hpp` | New pure policy class |
+            | `src / controllers / vibration_damping_policy.cpp` | New decision logic |
+            | `src / controllers / accel_timeline.hpp` | New pure ACCEL timer |
+            | `src / controllers / accel_timeline.cpp` | New motor - on accumulator and wall cap |
+            | `src / controllers / spin_controller.hpp` | Remove sprint types and fields;
+    add `ACCEL`, `VIBE_DAMPING`, damping fields, `AccelTimeline`;
+    update `SpinConfig` | | `src / controllers / spin_controller.cpp` | Remove sprint state machine;
+    implement ACCEL, damping, monitor update, timing accounting,
+        fail - safes | | `src / fsm / wash_cycle_coordinator.hpp` | Change `unbalance_agitate_sec` default to 120 s |
+            | `test / test_vibration_monitor.cpp` | Add hysteresis,
+        debounce, invalid - config,
+        sensor - health tests | | `test / test_vibration_damping_policy.cpp` | New decision - table tests |
+            | `test / test_accel_timeline.cpp` | New timer tests | | `test / test_spin_controller.cpp` |
+            Replace sprint tests with ACCEL / damping tests;
+} update `SpinConfig` initializers |
 | `test/test_wash_cycle_coordinator.cpp` | Update `SpinConfig` aggregate initializer |
 | `test/test_panel_controller.cpp` | Update `SpinConfig` aggregate initializer |
 | `docs/vibration_analysis.md` | Replace the 150–350 RPM band with the measured 200–380 RPM band and reference the RPM report |
@@ -733,7 +770,7 @@ Required new coverage:
 **`test_vibration_monitor.cpp`**
 
 - Warning sets above `warning_threshold`.
-- Warning remains latched between `warning_clear` and `warning_threshold`.
+- Warning remains latched between `accel_warning_clear` and `accel_warning_threshold` during ACCEL-damping mode.
 - Warning clears below `warning_clear`.
 - `warning_debounce_ms` prevents a single-window transient from setting warning.
 - `reset()` clears warning and debounce state.
@@ -926,6 +963,9 @@ If the refactor must be rolled back:
 1. Revert the commit or merge that introduced `ACCEL` and removed sprints.
 2. Restore the previous `SpinConfig` and `SpinSubPhase` definitions.
 3. Restore the sprint tests.
-4. Keep the `VibrationMonitor` hysteresis and `coast_down_ms` changes only if they are independently validated; otherwise revert them as part of the same change set.
+4. Keep the `VibrationMonitor` hysteresis and `coast_down_ms` changes only if they are independently validated;
+  otherwise revert them as part of the same change set.
 
-Do not keep both sprint and ACCEL paths behind a production runtime flag. Maintaining two acceleration strategies doubles the test matrix and reintroduces the open-loop behavior the refactor is intended to remove.
+      Do not keep both sprint and
+      ACCEL paths behind a production runtime flag.Maintaining two acceleration strategies doubles the test matrix and
+      reintroduces the open - loop behavior the refactor is intended to remove.

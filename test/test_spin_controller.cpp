@@ -458,7 +458,7 @@ TEST_F(SpinControllerTest, VibeDampingContinuesSamplingMonitorAndResumesToAccel)
     EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::ACCEL);
 }
 
-TEST_F(SpinControllerTest, WarningDuringDutyRunOnEntersVibeDampingAndResumesDutyRunOn)
+TEST_F(SpinControllerTest, WarningDuringDutyRunOnDoesNotEnterVibeDamping)
 {
     mocks::MockVibrationMonitor mock_vib;
     controllers::SpinConfig cfg = config;
@@ -479,12 +479,7 @@ TEST_F(SpinControllerTest, WarningDuringDutyRunOnEntersVibeDampingAndResumesDuty
     ON_CALL(mock_vib, is_warning()).WillByDefault(Return(true));
     simulated_time_ms += 50;
     spin_with_vib.update();
-    ASSERT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::VIBE_DAMPING);
 
-    ON_CALL(mock_vib, is_warning()).WillByDefault(Return(false));
-    simulated_time_ms += 150; // >= min_off
-    EXPECT_CALL(mock_motor, rotate_clockwise()).Times(AtLeast(1));
-    spin_with_vib.update();
     EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::DUTY_RUN_ON);
 }
 
@@ -644,14 +639,13 @@ TEST_F(SpinControllerTest, PauseDuringVibeDampingAndResumeRestartsFromAccelSafel
     EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::ACCEL);
 }
 
-TEST_F(SpinControllerTest, DutyRunElapsedExcludesVibeDampingTime)
+TEST_F(SpinControllerTest, DutyRunOnContinuesDuringWarningWithoutDamping)
 {
     mocks::MockVibrationMonitor mock_vib;
     controllers::SpinConfig cfg = config;
     cfg.accel_motor_on_ms = 100;
     cfg.duty_on_ms = 300;
     cfg.duty_off_ms = 1000;
-    cfg.damping_min_off_ms = 50;
     controllers::SpinController spin_with_vib{mock_timer, mock_drain_pump, mock_motor, cfg, &mock_vib};
 
     ON_CALL(mock_vib, is_sensor_ok()).WillByDefault(Return(true));
@@ -666,19 +660,12 @@ TEST_F(SpinControllerTest, DutyRunElapsedExcludesVibeDampingTime)
     spin_with_vib.update(); // -> DUTY_RUN_ON
     ASSERT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::DUTY_RUN_ON);
 
-    // 100ms into duty ON, enter damping
-    simulated_time_ms += 100;
+    // Warning during duty run on must not enter damping; pulse timing continues
     ON_CALL(mock_vib, is_warning()).WillByDefault(Return(true));
+    simulated_time_ms += 100;
     spin_with_vib.update();
-    ASSERT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::VIBE_DAMPING);
+    EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::DUTY_RUN_ON);
 
-    // stay in damping for 500ms (should not count toward duty)
-    simulated_time_ms += 500;
-    ON_CALL(mock_vib, is_warning()).WillByDefault(Return(false));
-    spin_with_vib.update(); // resumes to DUTY_RUN_ON
-    ASSERT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::DUTY_RUN_ON);
-
-    // remaining 200ms of ON pulse should complete now
     simulated_time_ms += 200;
     spin_with_vib.update();
     EXPECT_EQ(spin_with_vib.get_sub_phase(), controllers::SpinSubPhase::DUTY_RUN_OFF);

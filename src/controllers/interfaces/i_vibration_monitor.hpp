@@ -9,7 +9,8 @@ namespace controllers {
  * @interface IVibrationMonitor
  * @brief Interface for mechanical vibration tracking, motion detection, and unbalance protection.
  */
-class IVibrationMonitor {
+class IVibrationMonitor
+{
 public:
     virtual ~IVibrationMonitor() = default;
 
@@ -64,6 +65,15 @@ public:
      * @brief Reset trip and warning flags, and clear sampling buffer.
      */
     virtual void reset() = 0;
+
+    /**
+     * @brief Enable ACCEL-sensitive warning evaluation (damping context).
+     * When enabled, envelope warning uses accel thresholds/debounce/hysteresis.
+     * When disabled, damping-warning is not latched/held, but trip/shock/motion/sensor
+     * health continue to be evaluated.
+     * @param enabled true while in ACCEL or damping that must resume to ACCEL.
+     */
+    virtual void set_accel_damping_mode(bool enabled) = 0;
 };
 
 } // namespace controllers

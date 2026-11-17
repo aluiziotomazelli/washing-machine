@@ -81,6 +81,16 @@ void SpinController::start(domain::WaterLevel level, uint32_t duration_sec)
     phase_start_ms_ = timer_hal_.get_time_ms();
 }
 
+void SpinController::sync_accel_damping_mode()
+{
+    if (vibration_monitor_ == nullptr) {
+        return;
+    }
+    bool enable = (sub_phase_ == SpinSubPhase::ACCEL) ||
+                  (sub_phase_ == SpinSubPhase::VIBE_DAMPING && damping_return_phase_ == SpinSubPhase::ACCEL);
+    vibration_monitor_->set_accel_damping_mode(enable);
+}
+
 void SpinController::update_sensor_bad_tracking(uint32_t now)
 {
     if (vibration_monitor_ == nullptr) {
@@ -176,6 +186,7 @@ void SpinController::resume_from_vibe_damping(uint32_t now)
         phase_start_ms_ = now;
         motor_.rotate_clockwise();
         accel_timeline_.on_motor_on(now);
+        sync_accel_damping_mode();
         return;
     }
 
@@ -183,6 +194,7 @@ void SpinController::resume_from_vibe_damping(uint32_t now)
         duty_run_start_ms_ = now;
         phase_start_ms_ = now - damping_phase_elapsed_ms_;
         motor_.rotate_clockwise();
+        sync_accel_damping_mode();
         return;
     }
 
@@ -217,6 +229,7 @@ void SpinController::update()
          sub_phase_ == SpinSubPhase::DUTY_RUN_ON || sub_phase_ == SpinSubPhase::DUTY_RUN_OFF);
 
     if (vibration_monitor_ != nullptr && monitor_active) {
+        sync_accel_damping_mode();
         vibration_monitor_->update();
         update_sensor_bad_tracking(now);
 
@@ -225,14 +238,13 @@ void SpinController::update()
             return;
         }
 
-        bool motor_energized = (sub_phase_ == SpinSubPhase::ACCEL || sub_phase_ == SpinSubPhase::DUTY_RUN_ON);
         if ((sub_phase_ == SpinSubPhase::ACCEL || sub_phase_ == SpinSubPhase::DUTY_RUN_ON) &&
             sensor_bad_duration_ms(now) >= config_.damping_sensor_timeout_ms) {
             enter_retry_or_stop(now);
             return;
         }
 
-        if (motor_energized && vibration_monitor_->is_warning()) {
+        if (sub_phase_ == SpinSubPhase::ACCEL && vibration_monitor_->is_warning()) {
             enter_vibe_damping(now);
             return;
         }
@@ -262,6 +274,7 @@ void SpinController::update()
                 duty_run_start_ms_ = now;
                 motor_.rotate_clockwise();
             }
+            sync_accel_damping_mode();
         }
         break;
 
@@ -284,6 +297,7 @@ void SpinController::update()
             motor_.stop();
             sub_phase_ = SpinSubPhase::COAST_DOWN;
             phase_start_ms_ = now;
+            sync_accel_damping_mode();
             return;
         }
 
@@ -292,6 +306,7 @@ void SpinController::update()
                 motor_.stop();
                 sub_phase_ = SpinSubPhase::DUTY_RUN_OFF;
                 phase_start_ms_ = now;
+                sync_accel_damping_mode();
             }
         }
         else {
@@ -299,6 +314,7 @@ void SpinController::update()
                 motor_.rotate_clockwise();
                 sub_phase_ = SpinSubPhase::DUTY_RUN_ON;
                 phase_start_ms_ = now;
+                sync_accel_damping_mode();
             }
         }
         break;
@@ -316,6 +332,7 @@ void SpinController::update()
             drain_pump_.turn_off();
             sub_phase_ = SpinSubPhase::PAUSED;
             is_paused_ = true;
+            sync_accel_damping_mode();
         }
         break;
 
@@ -343,6 +360,7 @@ void SpinController::update()
             sub_phase_ = SpinSubPhase::CLUTCH_ENGAGE;
             resume_target_phase_ = SpinSubPhase::ACCEL;
             phase_start_ms_ = now;
+            sync_accel_damping_mode();
         }
         break;
 
@@ -375,6 +393,7 @@ void SpinController::pause()
         drain_pump_.turn_off();
         sub_phase_ = SpinSubPhase::PAUSED;
         is_paused_ = true;
+        sync_accel_damping_mode();
         return;
     }
 

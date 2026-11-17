@@ -11,20 +11,22 @@ VibrationMonitor::VibrationMonitor(
     , config_(config)
 {
     // Runtime configuration invariant validation
-    bool valid =
-        (config_.warning_clear < config_.warning_threshold) && (config_.warning_threshold < config_.trip_threshold) &&
-        (config_.trip_threshold <= config_.shock_threshold) && (config_.motion_threshold < config_.warning_threshold) &&
-        (config_.warning_debounce_ms < config_.sustained_trip_duration_ms);
+    bool valid = (config_.accel_warning_clear < config_.accel_warning_threshold) &&
+                 (config_.accel_warning_threshold < config_.trip_threshold) &&
+                 (config_.trip_threshold <= config_.shock_threshold) &&
+                 (config_.motion_threshold < config_.accel_warning_threshold) &&
+                 (config_.warning_debounce_ms < config_.sustained_trip_duration_ms);
 
     if (!valid) {
         is_config_valid_ = false;
         // Clamp to safe defaults
-        if (config_.warning_clear >= config_.warning_threshold) {
-            config_.warning_clear = (config_.warning_threshold > 1000) ? (config_.warning_threshold - 1000)
-                                                                       : (config_.warning_threshold / 2);
+        if (config_.accel_warning_clear >= config_.accel_warning_threshold) {
+            config_.accel_warning_clear = (config_.accel_warning_threshold > 1000)
+                                              ? (config_.accel_warning_threshold - 1000)
+                                              : (config_.accel_warning_threshold / 2);
         }
-        if (config_.motion_threshold >= config_.warning_threshold) {
-            config_.motion_threshold = config_.warning_threshold / 2;
+        if (config_.motion_threshold >= config_.accel_warning_threshold) {
+            config_.motion_threshold = config_.accel_warning_threshold / 2;
         }
         if (config_.warning_debounce_ms >= config_.sustained_trip_duration_ms) {
             config_.warning_debounce_ms = config_.sustained_trip_duration_ms / 2;
@@ -57,6 +59,13 @@ void VibrationMonitor::reset()
     warning_since_ms_ = 0;
     last_sample_ms_ = 0;
     last_read_success_ms_ = 0;
+}
+
+void VibrationMonitor::set_accel_damping_mode(bool enabled)
+{
+    accel_damping_mode_ = enabled;
+    is_warning_ = false;
+    warning_since_ms_ = 0;
 }
 
 void VibrationMonitor::update()
@@ -125,32 +134,40 @@ void VibrationMonitor::process_sample(const hal::Vector3& sample, uint32_t now)
         // Evaluate motion
         is_in_motion_ = (current_vib_ >= config_.motion_threshold);
 
-        // Evaluate warning with debounce and hysteresis
-        if (current_vib_ >= config_.warning_threshold) {
-            if (warning_since_ms_ == 0) {
-                warning_since_ms_ = now;
+        // Evaluate warning with debounce and hysteresis (ACCEL-damping mode only)
+        if (accel_damping_mode_) {
+            if (current_vib_ >= config_.accel_warning_threshold) {
+                if (warning_since_ms_ == 0) {
+                    warning_since_ms_ = now;
+                }
+                if ((now - warning_since_ms_) >= config_.warning_debounce_ms) {
+                    is_warning_ = true;
+                }
             }
-            if ((now - warning_since_ms_) >= config_.warning_debounce_ms) {
-                is_warning_ = true;
+            else if (current_vib_ < config_.accel_warning_clear) {
+                is_warning_ = false;
+                warning_since_ms_ = 0;
+            }
+            else {
+                // Hysteresis hold between clear and threshold:
+                // if warning not latched, excursion below threshold resets debounce
+                if (!is_warning_) {
+                    warning_since_ms_ = 0;
+                }
             }
         }
-        else if (current_vib_ < config_.warning_clear) {
+        else {
             is_warning_ = false;
             warning_since_ms_ = 0;
         }
-        else {
-            // Hysteresis hold between warning_clear and warning_threshold:
-            // if warning was not yet latched, an excursion below warning_threshold resets debounce
-            if (!is_warning_) {
-                warning_since_ms_ = 0;
-            }
-        }
 
-        // Evaluate safety trip
+        // Evaluate safety trip (active in all phases)
         if (current_vib_ >= config_.shock_threshold) {
             // Immediate single-shock trip (foot-slip zone)
             is_tripped_ = true;
-            is_warning_ = true;
+            if (accel_damping_mode_) {
+                is_warning_ = true;
+            }
         }
         else if (current_vib_ >= config_.trip_threshold) {
             // Sustained trip zone

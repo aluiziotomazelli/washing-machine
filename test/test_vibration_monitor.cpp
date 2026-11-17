@@ -20,11 +20,11 @@ protected:
         20,    // 20 ms sample period (50 Hz)
         10,    // 10 samples per window (200 ms)
         400,   // 400 LSB motion threshold
-        8500,  // 8500 LSB warning threshold
+        8500,  // 8500 LSB accel warning threshold
         11000, // 11000 LSB sustained trip threshold
         14000, // 14000 LSB immediate shock threshold
         1000,  // 1000 ms sustained trip duration
-        4000,  // 4000 LSB warning clear (test expectation)
+        4000,  // 4000 LSB accel warning clear (test expectation)
         200    // 200 ms warning debounce
     };
 
@@ -35,6 +35,7 @@ protected:
     {
         current_time_ms = 0;
         ON_CALL(mock_timer, get_time_ms()).WillByDefault(Invoke([this]() { return current_time_ms; }));
+        monitor.set_accel_damping_mode(true);
     }
 
     // Helper: Feed a window of 10 samples spanning min/max values
@@ -131,6 +132,17 @@ TEST_F(VibrationMonitorTest, TripsImmediatelyOnSevereShockAbove14000)
 
     EXPECT_EQ(monitor.get_vibration(), 14500);
     EXPECT_TRUE(monitor.is_warning());
+    EXPECT_TRUE(monitor.is_critical_unbalance());
+}
+
+TEST_F(VibrationMonitorTest, ShockTripsEvenWhenAccelDampingModeDisabled)
+{
+    monitor.set_accel_damping_mode(false);
+
+    feed_window(0, 5000, 0, 5000, 0, 4500);
+
+    EXPECT_EQ(monitor.get_vibration(), 14500);
+    EXPECT_FALSE(monitor.is_warning());
     EXPECT_TRUE(monitor.is_critical_unbalance());
 }
 
@@ -308,18 +320,18 @@ TEST_F(VibrationMonitorTest, RejectsOrClampsInvalidConfiguration)
         20,    // sample_period_ms
         10,    // window_samples
         400,   // motion_threshold
-        5500,  // warning_threshold
+        5500,  // accel_warning_threshold
         11000, // trip_threshold
         14000, // shock_threshold
         1000,  // sustained_trip_duration_ms
-        6000,  // warning_clear (INVALID: >= warning_threshold 5500!)
+        6000,  // accel_warning_clear (INVALID: >= accel_warning_threshold 5500!)
         200    // warning_debounce_ms
     };
 
     controllers::VibrationMonitor custom_mon{mock_accel, mock_timer, invalid_config};
     EXPECT_FALSE(custom_mon.is_config_valid());
     // Safe clamp ensures warning_clear is strictly less than warning_threshold
-    EXPECT_LT(custom_mon.get_config().warning_clear, custom_mon.get_config().warning_threshold);
+    EXPECT_LT(custom_mon.get_config().accel_warning_clear, custom_mon.get_config().accel_warning_threshold);
 }
 
 TEST_F(VibrationMonitorTest, SensorFailureDoesNotSilentlyClearWarning)
