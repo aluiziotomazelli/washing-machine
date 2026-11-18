@@ -39,13 +39,13 @@ struct SprintStep
 };
 
 constexpr SprintStep k_default_sprints[] = {
-    {3000, 2000}, // S1: Initial pull & clothing distribution without dying
-    {1000, 2000}, // S2: Water expulsion with short pause to prevent coasting resonance
-    {1500, 3000}, // S3: Speed ramp & suspension stabilization
-    {2000, 3600}, // S4: Cutoff before resonance peak & high-speed handover to cruise
-    {2500, 4000}, // S5: Cutoff before resonance peak & high-speed handover to cruise
-    {3000, 4000}, // S5: Cutoff before resonance peak & high-speed handover to cruise
-    {3500, 4000}, // S5: Cutoff before resonance peak & high-speed handover to cruise
+    {3000, 2000}, // S1..S4 inalterados
+    {1500, 2000},
+    {2000, 2500},
+    {2500, 2500},
+    {3000, 3000}, // era 3500: OFF curto preserva rotação residual
+    {3500, 5000},
+    {3500, 5000}
 
 };
 
