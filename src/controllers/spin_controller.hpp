@@ -38,12 +38,15 @@ struct SprintStep
     uint16_t off_ms; //!< Inertia coast time between sprint pulses.
 };
 
-// Default progressive sprint profile tuned for top-load suspension dynamics
 constexpr SprintStep k_default_sprints[] = {
     {3000, 2000}, // S1: Initial pull & clothing distribution without dying
-    {3500, 2500}, // S2: Water expulsion with short pause to prevent coasting resonance
-    {4000, 3500}, // S3: Speed ramp & suspension stabilization
-    {4500, 4000}  // S4: Cutoff before resonance peak & high-speed handover to cruise
+    {1000, 2000}, // S2: Water expulsion with short pause to prevent coasting resonance
+    {1500, 3000}, // S3: Speed ramp & suspension stabilization
+    {2000, 3600}, // S4: Cutoff before resonance peak & high-speed handover to cruise
+    {2500, 4000}, // S5: Cutoff before resonance peak & high-speed handover to cruise
+    {3000, 4000}, // S5: Cutoff before resonance peak & high-speed handover to cruise
+    {3500, 4000}, // S5: Cutoff before resonance peak & high-speed handover to cruise
+
 };
 
 /**
@@ -52,10 +55,10 @@ constexpr SprintStep k_default_sprints[] = {
  */
 struct SpinConfig
 {
-    uint32_t clutch_engage_ms{5000}; //!< Clutch engagement delay in milliseconds.
-    uint32_t duty_on_ms{4000};       //!< Continuous extraction motor pulse duration.
-    uint32_t duty_off_ms{4000};      //!< Inertia coast duration between extraction pulses.
-    uint32_t coast_down_ms{10000};   //!< Drum coast-down time before releasing the pump/brake.
+    uint32_t clutch_engage_ms{5000};              //!< Clutch engagement delay in milliseconds.
+    uint32_t duty_on_ms{4000};                    //!< Continuous extraction motor pulse duration.
+    uint32_t duty_off_ms{4000};                   //!< Inertia coast duration between extraction pulses.
+    uint32_t coast_down_ms{10000};                //!< Drum coast-down time before releasing the pump/brake.
     const SprintStep* sprints{k_default_sprints}; //!< Progressive sprint profile to execute.
     uint8_t sprint_count{sizeof(k_default_sprints) / sizeof(k_default_sprints[0])}; //!< Number of sprint entries.
     uint8_t max_unbalance_retries{1}; //!< Maximum dry redistribution retries before latching an error.
